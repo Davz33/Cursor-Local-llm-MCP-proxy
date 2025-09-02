@@ -263,27 +263,96 @@ class LocalLLMProxyServer {
   }
 
   async validateResponse(response, originalPrompt) {
-    // Simple validation - check if response is not empty and has reasonable length
+    // Basic validation first
     if (!response || response.trim().length === 0) {
-      return false;
+      return { valid: false, reason: 'empty_response' };
     }
 
     // Check if response is too short (less than 10 characters)
     if (response.trim().length < 10) {
-      return false;
+      return { valid: false, reason: 'too_short' };
     }
 
     // Check if response contains error indicators
     const errorIndicators = ['error', 'failed', 'unable to', 'cannot', 'sorry, i cannot'];
     const lowerResponse = response.toLowerCase();
     if (errorIndicators.some(indicator => lowerResponse.includes(indicator))) {
-      return false;
+      return { valid: false, reason: 'error_indicators' };
     }
 
-    // For more sophisticated validation, you could call another LLM here
-    // to evaluate the quality of the response
-    
-    return true;
+    // If LLM validation is enabled, use it for more sophisticated validation
+    if (this.validationConfig.enabled) {
+      return await this.validateWithLLM(response, originalPrompt);
+    }
+
+    return { valid: true, reason: 'basic_validation_passed' };
+  }
+
+  async validateWithLLM(response, originalPrompt) {
+    try {
+      const validationPrompt = `You are a quality assessor for AI responses. Please evaluate the following response to determine if it adequately addresses the user's prompt.
+
+USER PROMPT: "${originalPrompt}"
+
+AI RESPONSE: "${response}"
+
+Please assess the response on these criteria:
+1. Relevance: Does the response directly address the user's question/prompt?
+2. Completeness: Is the response complete and informative?
+3. Accuracy: Does the response appear factually correct?
+4. Clarity: Is the response clear and well-structured?
+5. Helpfulness: Would this response be helpful to the user?
+
+Respond with ONLY a JSON object in this exact format:
+{
+  "valid": true/false,
+  "confidence": 0.0-1.0,
+  "reason": "brief explanation",
+  "suggestions": ["suggestion1", "suggestion2"] (only if valid: false)
+}`;
+
+      // Use local LLM for validation
+      const validationResponse = await fetch(`${this.localLLMUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'local',
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant that evaluates AI responses for quality and relevance. Always respond with valid JSON.' },
+            { role: 'user', content: validationPrompt }
+          ],
+          max_tokens: 300,
+          temperature: 0.1,
+        }),
+      });
+
+      if (!validationResponse.ok) {
+        console.log('Local LLM validation failed, falling back to basic validation');
+        return { valid: true, reason: 'local_llm_validation_failed_fallback' };
+      }
+
+      const validationData = await validationResponse.json();
+      const validationText = validationData.choices[0]?.message?.content || '';
+
+      try {
+        const validation = JSON.parse(validationText);
+        return {
+          valid: validation.valid,
+          reason: validation.reason,
+          confidence: validation.confidence || 0.5,
+          suggestions: validation.suggestions || [],
+        };
+      } catch (parseError) {
+        console.log('Failed to parse local LLM validation response, using fallback');
+        return { valid: true, reason: 'local_llm_validation_parse_error' };
+      }
+
+    } catch (error) {
+      console.log('Local LLM validation error:', error.message);
+      return { valid: true, reason: 'local_llm_validation_error_fallback' };
+    }
   }
 
   async tryFallbackModels(params) {
