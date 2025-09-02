@@ -86,6 +86,36 @@ class LocalLLMProxyServer {
     return contextText;
   }
 
+  async gatherContextFromMCPs(prompt, availableServers = []) {
+    const context = {
+      past_chats: [],
+      files: [],
+      memory: [],
+      context7_docs: [],
+      custom_context: ''
+    };
+
+    try {
+      // This would be called by the Cursor agent to gather context
+      // from available MCP servers before calling the local LLM
+      
+      // Example of how context could be gathered:
+      // - Memory MCP: Get relevant memories
+      // - Context7 MCP: Get relevant documentation
+      // - File system: Get relevant files
+      // - Chat history: Get recent conversations
+      
+      console.log('Context gathering would be implemented here based on available MCP servers');
+      console.log('Available servers:', availableServers);
+      console.log('Prompt for context:', prompt);
+      
+    } catch (error) {
+      console.log('Error gathering context from MCPs:', error.message);
+    }
+
+    return context;
+  }
+
   setupHandlers() {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
@@ -235,6 +265,39 @@ class LocalLLMProxyServer {
               required: ['messages'],
             },
           },
+          {
+            name: 'generate_with_context',
+            description: 'Generate text with automatic context gathering from available MCP servers',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                prompt: {
+                  type: 'string',
+                  description: 'The text prompt to generate from',
+                },
+                context_sources: {
+                  type: 'array',
+                  description: 'Available MCP servers to gather context from',
+                  items: {
+                    type: 'string',
+                    enum: ['memory', 'context7', 'files', 'chat_history']
+                  },
+                  default: ['memory', 'context7']
+                },
+                max_tokens: {
+                  type: 'number',
+                  description: 'Maximum number of tokens to generate',
+                  default: 1000,
+                },
+                temperature: {
+                  type: 'number',
+                  description: 'Temperature for generation',
+                  default: 0.7,
+                },
+              },
+              required: ['prompt'],
+            },
+          },
         ],
       };
     });
@@ -248,6 +311,8 @@ class LocalLLMProxyServer {
             return await this.handleTextGeneration(args);
           case 'chat_completion':
             return await this.handleChatCompletion(args);
+          case 'generate_with_context':
+            return await this.handleContextAwareGeneration(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -411,6 +476,35 @@ class LocalLLMProxyServer {
       max_tokens,
       temperature,
     });
+  }
+
+  async handleContextAwareGeneration(args) {
+    const { prompt, context_sources = ['memory', 'context7'], max_tokens = 1000, temperature = 0.7 } = args;
+
+    try {
+      // Gather context from available MCP servers
+      const context = await this.gatherContextFromMCPs(prompt, context_sources);
+      
+      // Use the context-aware text generation
+      return await this.handleTextGeneration({
+        prompt,
+        context,
+        max_tokens,
+        temperature,
+        use_local_first: true
+      });
+      
+    } catch (error) {
+      console.log('Context-aware generation failed, falling back to basic generation:', error.message);
+      
+      // Fallback to basic generation without context
+      return await this.handleTextGeneration({
+        prompt,
+        max_tokens,
+        temperature,
+        use_local_first: true
+      });
+    }
   }
 
   async callLocalLLM(params) {

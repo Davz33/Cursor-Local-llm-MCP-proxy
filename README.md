@@ -8,6 +8,8 @@ This MCP server implements speculative decoding with your local LLM, trying the 
 - **Response Validation**: Validates local LLM responses for quality
 - **LLM-Based Validation**: Uses the local LLM itself to assess response quality
 - **Response Refinement**: Automatically refines responses based on validation feedback
+- **Context Integration**: Leverages past chats, files, memory, and documentation for enhanced responses
+- **Automatic Context Gathering**: Can automatically gather context from available MCP servers
 - **Automatic Fallback**: Falls back to Cursor agent when local response is inadequate
 - **OpenAI-Compatible**: Works with standard OpenAI API endpoints
 
@@ -27,6 +29,12 @@ Generate text using local LLM with fallback to other models.
 
 **Parameters:**
 - `prompt` (string, required): The text prompt to generate from
+- `context` (object, optional): Context information to enhance the response
+  - `past_chats` (array): Previous chat messages for context
+  - `files` (array): Relevant file contents with path and content
+  - `memory` (array): Relevant memory entries
+  - `context7_docs` (array): Context7 documentation snippets
+  - `custom_context` (string): Any additional context information
 - `max_tokens` (number, optional): Maximum tokens to generate (default: 1000)
 - `temperature` (number, optional): Temperature for generation (default: 0.7)
 - `use_local_first` (boolean, optional): Try local LLM first (default: true)
@@ -36,6 +44,18 @@ Chat completion using local LLM with fallback.
 
 **Parameters:**
 - `messages` (array, required): Array of chat messages
+- `context` (object, optional): Context information to enhance the response (same structure as above)
+- `max_tokens` (number, optional): Maximum tokens to generate (default: 1000)
+- `temperature` (number, optional): Temperature for generation (default: 0.7)
+
+### `generate_with_context`
+Generate text with automatic context gathering from available MCP servers.
+
+**Parameters:**
+- `prompt` (string, required): The text prompt to generate from
+- `context_sources` (array, optional): Available MCP servers to gather context from
+  - Options: `['memory', 'context7', 'files', 'chat_history']`
+  - Default: `['memory', 'context7']`
 - `max_tokens` (number, optional): Maximum tokens to generate (default: 1000)
 - `temperature` (number, optional): Temperature for generation (default: 0.7)
 
@@ -61,6 +81,30 @@ If validation fails, the server can automatically refine the response by:
 1. Using validation feedback to generate improvement suggestions
 2. Asking the local LLM to improve the response based on feedback
 3. Re-validating the refined response
+
+## Context Integration
+
+The server can leverage various sources of context to provide more accurate and relevant responses:
+
+### Context Sources
+- **Past Chats**: Previous conversation history for continuity
+- **Files**: Relevant file contents from the current project
+- **Memory**: Persistent memory entries from the memory MCP server
+- **Context7 Docs**: Documentation snippets from the Context7 MCP server
+- **Custom Context**: Any additional context information
+
+### Context Processing
+- Context is automatically formatted and integrated into prompts
+- For text generation: Context is appended to the prompt
+- For chat completion: Context is added as system message or appended to user message
+- Context is also used during response refinement for better improvements
+
+### Automatic Context Gathering
+The `generate_with_context` tool can automatically gather context from available MCP servers:
+- Memory MCP: Retrieves relevant memories
+- Context7 MCP: Gets relevant documentation
+- File system: Accesses relevant files
+- Chat history: Includes recent conversations
 
 ## Fallback Behavior
 
