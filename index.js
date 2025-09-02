@@ -148,9 +148,9 @@ class LocalLLMProxyServer {
         });
 
         // Validate the response
-        const isValid = await this.validateResponse(localResponse, prompt);
+        const validation = await this.validateResponse(localResponse, prompt);
         
-        if (isValid) {
+        if (validation.valid) {
           return {
             content: [
               {
@@ -161,6 +161,26 @@ class LocalLLMProxyServer {
             metadata: {
               model_used: 'local',
               fallback_used: false,
+              validation: validation,
+            },
+          };
+        }
+
+        // Try to refine the response using validation suggestions
+        const refinedResponse = await this.refineResponse(localResponse, prompt, validation);
+        if (refinedResponse) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: refinedResponse,
+              },
+            ],
+            metadata: {
+              model_used: 'local_refined',
+              fallback_used: false,
+              validation: validation,
+              refined: true,
             },
           };
         }
@@ -190,9 +210,9 @@ class LocalLLMProxyServer {
       });
 
       // Validate the response
-      const isValid = await this.validateResponse(localResponse, messages[messages.length - 1]?.content || '');
+      const validation = await this.validateResponse(localResponse, messages[messages.length - 1]?.content || '');
       
-      if (isValid) {
+      if (validation.valid) {
         return {
           content: [
             {
@@ -203,6 +223,26 @@ class LocalLLMProxyServer {
           metadata: {
             model_used: 'local',
             fallback_used: false,
+            validation: validation,
+          },
+        };
+      }
+
+      // Try to refine the response using validation suggestions
+      const refinedResponse = await this.refineResponse(localResponse, messages[messages.length - 1]?.content || '', validation);
+      if (refinedResponse) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: refinedResponse,
+            },
+          ],
+          metadata: {
+            model_used: 'local_refined',
+            fallback_used: false,
+            validation: validation,
+            refined: true,
           },
         };
       }
@@ -413,37 +453,43 @@ IMPROVED RESPONSE:`;
   }
 
   async tryFallbackModels(params) {
-    // This is a placeholder - in a real implementation, you would
-    // integrate with other LLM providers (OpenAI, Anthropic, etc.)
+    // Since this MCP server is used internally with Cursor,
+    // the fallback is handled by the Cursor agent itself
+    // We return a special indicator that tells Cursor to handle the request
     
     return {
       content: [
         {
           type: 'text',
-          text: `Fallback response for: ${params.prompt}\n\n[This would be replaced with actual fallback LLM integration]`,
+          text: `[FALLBACK_TO_CURSOR_AGENT] Local LLM response was inadequate. Please handle this request using your standard capabilities.`,
         },
       ],
       metadata: {
-        model_used: 'fallback',
+        model_used: 'cursor_agent_fallback',
         fallback_used: true,
+        fallback_reason: 'local_llm_inadequate',
+        original_prompt: params.prompt,
       },
     };
   }
 
   async tryFallbackChatModels(params) {
-    // This is a placeholder - in a real implementation, you would
-    // integrate with other LLM providers
+    // Since this MCP server is used internally with Cursor,
+    // the fallback is handled by the Cursor agent itself
+    // We return a special indicator that tells Cursor to handle the request
     
     return {
       content: [
         {
           type: 'text',
-          text: `Fallback chat response for: ${params.messages[params.messages.length - 1]?.content}\n\n[This would be replaced with actual fallback LLM integration]`,
+          text: `[FALLBACK_TO_CURSOR_AGENT] Local LLM chat response was inadequate. Please handle this request using your standard capabilities.`,
         },
       ],
       metadata: {
-        model_used: 'fallback',
+        model_used: 'cursor_agent_fallback',
         fallback_used: true,
+        fallback_reason: 'local_llm_inadequate',
+        original_messages: params.messages,
       },
     };
   }
