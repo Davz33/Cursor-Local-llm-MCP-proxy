@@ -355,6 +355,63 @@ Respond with ONLY a JSON object in this exact format:
     }
   }
 
+  async refineResponse(originalResponse, originalPrompt, validation) {
+    if (!this.validationConfig.enabled || !validation.suggestions || validation.suggestions.length === 0) {
+      return null;
+    }
+
+    try {
+      const refinementPrompt = `The following response was generated but needs improvement based on the validation feedback.
+
+ORIGINAL PROMPT: "${originalPrompt}"
+
+ORIGINAL RESPONSE: "${originalResponse}"
+
+VALIDATION FEEDBACK: ${validation.reason}
+SUGGESTIONS: ${validation.suggestions.join(', ')}
+
+Please provide an improved version of the response that addresses the validation feedback while maintaining the core information. Make the response more relevant, complete, accurate, clear, and helpful.
+
+IMPROVED RESPONSE:`;
+
+      const refinedResponse = await fetch(`${this.localLLMUrl}/v1/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'local',
+          prompt: refinementPrompt,
+          max_tokens: 500,
+          temperature: 0.3,
+        }),
+      });
+
+      if (!refinedResponse.ok) {
+        console.log('Response refinement failed');
+        return null;
+      }
+
+      const data = await refinedResponse.json();
+      const refined = data.choices[0]?.text || '';
+
+      // Validate the refined response
+      const refinedValidation = await this.validateResponse(refined, originalPrompt);
+      
+      if (refinedValidation.valid) {
+        console.log('Response successfully refined');
+        return refined;
+      } else {
+        console.log('Refined response still not valid, trying fallback');
+        return null;
+      }
+
+    } catch (error) {
+      console.log('Error during response refinement:', error.message);
+      return null;
+    }
+  }
+
   async tryFallbackModels(params) {
     // This is a placeholder - in a real implementation, you would
     // integrate with other LLM providers (OpenAI, Anthropic, etc.)
