@@ -29,9 +29,10 @@ class LocalLLMProxyServer {
       'claude-3-sonnet',
     ];
 
-    // Configuration for LLM-based validation
+    // Configuration for validation
     this.validationConfig = {
       enabled: process.env.LLM_VALIDATION_ENABLED === 'true',
+      useCursorValidation: process.env.USE_CURSOR_VALIDATION === 'true',
       useLocalValidator: process.env.USE_LOCAL_VALIDATOR === 'true',
       maxRetries: parseInt(process.env.MAX_REFINEMENT_RETRIES) || 2,
     };
@@ -114,6 +115,28 @@ class LocalLLMProxyServer {
     }
 
     return context;
+  }
+
+  async validateWithCursorAgent(response, originalPrompt) {
+    // This method returns a special indicator that tells Cursor agent to validate the response
+    // Cursor agent will handle the validation using its built-in capabilities
+    
+    return {
+      valid: false, // Default to false to trigger Cursor validation
+      reason: 'cursor_validation_required',
+      confidence: 0.5,
+      suggestions: [],
+      cursor_validation_request: {
+        response: response,
+        original_prompt: originalPrompt,
+        validation_criteria: [
+          'Is the response relevant to the question?',
+          'Is the response complete and informative?',
+          'Does the response contain any obvious errors?',
+          'Is the response clear and well-structured?'
+        ]
+      }
+    };
   }
 
   setupHandlers() {
@@ -298,6 +321,35 @@ class LocalLLMProxyServer {
               required: ['prompt'],
             },
           },
+          {
+            name: 'validate_response',
+            description: 'Validate a local LLM response using Cursor agent capabilities',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                response: {
+                  type: 'string',
+                  description: 'The response to validate',
+                },
+                original_prompt: {
+                  type: 'string',
+                  description: 'The original prompt that generated the response',
+                },
+                validation_criteria: {
+                  type: 'array',
+                  description: 'Specific criteria to validate against',
+                  items: { type: 'string' },
+                  default: [
+                    'Is the response relevant to the question?',
+                    'Is the response complete and informative?',
+                    'Does the response contain any obvious errors?',
+                    'Is the response clear and well-structured?'
+                  ]
+                },
+              },
+              required: ['response', 'original_prompt'],
+            },
+          },
         ],
       };
     });
@@ -313,6 +365,8 @@ class LocalLLMProxyServer {
             return await this.handleChatCompletion(args);
           case 'generate_with_context':
             return await this.handleContextAwareGeneration(args);
+          case 'validate_response':
+            return await this.handleResponseValidation(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -507,6 +561,46 @@ class LocalLLMProxyServer {
     }
   }
 
+  async handleResponseValidation(args) {
+    const { response, original_prompt, validation_criteria } = args;
+
+    // This tool is designed to be called by the Cursor agent
+    // The Cursor agent should perform the actual validation using its capabilities
+    // and return a structured validation result
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `[CURSOR_VALIDATION_REQUIRED] Please validate this response using your built-in capabilities.
+
+ORIGINAL PROMPT: "${original_prompt}"
+
+RESPONSE TO VALIDATE: "${response}"
+
+VALIDATION CRITERIA:
+${validation_criteria.map((criterion, index) => `${index + 1}. ${criterion}`).join('\n')}
+
+Please provide a validation result in this format:
+{
+  "valid": true/false,
+  "confidence": 0.0-1.0,
+  "reason": "brief explanation",
+  "suggestions": ["suggestion1", "suggestion2"] (only if valid: false)
+}`,
+        },
+      ],
+      metadata: {
+        tool_used: 'validate_response',
+        validation_request: {
+          response: response,
+          original_prompt: original_prompt,
+          criteria: validation_criteria
+        }
+      },
+    };
+  }
+
   async callLocalLLM(params) {
     const response = await fetch(`${this.localLLMUrl}/v1/completions`, {
       method: 'POST',
@@ -569,9 +663,16 @@ class LocalLLMProxyServer {
       return { valid: false, reason: 'error_indicators' };
     }
 
-    // If LLM validation is enabled, use it for more sophisticated validation
+    // If validation is enabled, use the appropriate validation method
     if (this.validationConfig.enabled) {
-      return await this.validateWithLLM(response, originalPrompt);
+      // Prefer Cursor agent validation (more objective)
+      if (this.validationConfig.useCursorValidation) {
+        return await this.validateWithCursorAgent(response, originalPrompt);
+      }
+      // Fall back to local LLM validation if Cursor validation is not available
+      else if (this.validationConfig.useLocalValidator) {
+        return await this.validateWithLLM(response, originalPrompt);
+      }
     }
 
     return { valid: true, reason: 'basic_validation_passed' };

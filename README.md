@@ -4,7 +4,7 @@ This MCP server implements speculative decoding with your local LLM, trying the 
 
 ## Features
 
-- **Speculative Decoding**: Tries local LLM first at `http://127.0.0.1:1234`
+- **Speculative Decoding**: Tries local LLM first at local endpoint -`http://127.0.0.1:1234`for LM-Studio
 - **Response Validation**: Validates local LLM responses for quality
 - **LLM-Based Validation**: Uses the local LLM itself to assess response quality
 - **Response Refinement**: Automatically refines responses based on validation feedback
@@ -59,6 +59,15 @@ Generate text with automatic context gathering from available MCP servers.
 - `max_tokens` (number, optional): Maximum tokens to generate (default: 1000)
 - `temperature` (number, optional): Temperature for generation (default: 0.7)
 
+### `validate_response`
+Validate a local LLM response using Cursor agent capabilities.
+
+**Parameters:**
+- `response` (string, required): The response to validate
+- `original_prompt` (string, required): The original prompt that generated the response
+- `validation_criteria` (array, optional): Specific criteria to validate against
+  - Default: ['Is the response relevant?', 'Is it complete?', 'Does it contain errors?', 'Is it clear?']
+
 ## Response Validation
 
 The server validates local LLM responses using a two-tier approach:
@@ -68,13 +77,17 @@ The server validates local LLM responses using a two-tier approach:
 2. **Minimum length**: Response must be at least 10 characters
 3. **Error detection**: Checks for common error indicators
 
-### LLM-Based Validation (Optional)
-When enabled, uses the local LLM itself to assess:
+### Advanced Validation (Optional)
+When enabled, uses Cursor agent for objective validation:
 1. **Relevance**: Does the response address the user's prompt?
 2. **Completeness**: Is the response complete and informative?
 3. **Accuracy**: Does the response appear factually correct?
 4. **Clarity**: Is the response clear and well-structured?
 5. **Helpfulness**: Would this response be helpful to the user?
+
+**Validation Methods:**
+- **Cursor Agent Validation** (recommended): More objective and cost-effective
+- **Local LLM Validation** (fallback): Only when Cursor validation is not available
 
 ### Response Refinement
 If validation fails, the server can automatically refine the response by:
@@ -118,12 +131,26 @@ When the local LLM fails or produces inadequate responses, the server:
 ## Installation
 
 1. Install dependencies:
+
 ```bash
-cd /Users/dav/coding/tools/mcp_servers/local-llm-proxy
+git clone https://github.com/Davz33/Cursor-Local-llm-MCP-proxy && cd Cursor-Local-llm-MCP-proxy
 npm install
 ```
 
-2. The server is already configured in your `mcp.json` file
+2. In your`mcp.json` file
+
+```json
+    "local-llm-proxy": {
+      "command": "node",
+      "args": ["<clonde-repo-local-dir>"],
+      "env": {
+        "LOCAL_LLM_URL": "http://127.0.0.1:1234",
+        "LLM_VALIDATION_ENABLED": "true",
+        "USE_CURSOR_VALIDATION": "true",
+        "MAX_REFINEMENT_RETRIES": "2"
+      }
+    }
+```
 
 ## Usage
 
@@ -136,9 +163,10 @@ The server can be configured through environment variables:
 ### Basic Configuration
 - `LOCAL_LLM_URL`: URL of your local LLM (default: http://127.0.0.1:1234)
 
-### LLM Validation Configuration
-- `LLM_VALIDATION_ENABLED`: Enable LLM-based validation (default: false)
-- `USE_LOCAL_VALIDATOR`: Use local LLM for validation (default: true)
+### Validation Configuration
+- `LLM_VALIDATION_ENABLED`: Enable validation (default: false)
+- `USE_CURSOR_VALIDATION`: Use Cursor agent for validation (default: true, recommended)
+- `USE_LOCAL_VALIDATOR`: Use local LLM for validation (default: false, fallback only)
 - `MAX_REFINEMENT_RETRIES`: Maximum number of refinement attempts (default: 2)
 
 ### Example Configuration
@@ -146,12 +174,16 @@ The server can be configured through environment variables:
 # Basic mode (no validation)
 LLM_VALIDATION_ENABLED=false
 
-# With local LLM validation
+# With Cursor agent validation (recommended)
+LLM_VALIDATION_ENABLED=true
+USE_CURSOR_VALIDATION=true
+
+# With local LLM validation (fallback only)
 LLM_VALIDATION_ENABLED=true
 USE_LOCAL_VALIDATOR=true
 ```
 
-**Note**: No external API keys are needed! The fallback is handled by the Cursor agent itself.
+**Note**: Cursor agent validation is more objective and cost-effective than self-validation!
 
 ## Extending the Server
 

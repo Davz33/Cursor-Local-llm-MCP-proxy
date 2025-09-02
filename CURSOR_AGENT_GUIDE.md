@@ -48,6 +48,20 @@ This guide explains how the Cursor agent should properly use the local-llm-proxy
 }
 ```
 
+### 4. `validate_response` - Validate local LLM responses
+```json
+{
+  "response": "The response to validate",
+  "original_prompt": "The original prompt that generated the response",
+  "validation_criteria": [
+    "Is the response relevant to the question?",
+    "Is the response complete and informative?",
+    "Does the response contain any obvious errors?",
+    "Is the response clear and well-structured?"
+  ]
+}
+```
+
 ## How to Gather Context
 
 ### From Memory MCP Server
