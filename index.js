@@ -39,6 +39,53 @@ class LocalLLMProxyServer {
     this.setupHandlers();
   }
 
+  processContext(context) {
+    if (!context) return '';
+
+    let contextText = '';
+    
+    // Process past chats
+    if (context.past_chats && context.past_chats.length > 0) {
+      contextText += '\n\n## Previous Chat Context:\n';
+      context.past_chats.slice(-5).forEach((chat, index) => {
+        contextText += `${chat.role}: ${chat.content}\n`;
+      });
+    }
+
+    // Process file contents
+    if (context.files && context.files.length > 0) {
+      contextText += '\n\n## Relevant Files:\n';
+      context.files.forEach((file, index) => {
+        contextText += `\n### File: ${file.path}\n`;
+        contextText += `${file.content}\n`;
+      });
+    }
+
+    // Process memory entries
+    if (context.memory && context.memory.length > 0) {
+      contextText += '\n\n## Relevant Memory:\n';
+      context.memory.forEach((memory, index) => {
+        contextText += `- ${memory}\n`;
+      });
+    }
+
+    // Process Context7 documentation
+    if (context.context7_docs && context.context7_docs.length > 0) {
+      contextText += '\n\n## Documentation Context:\n';
+      context.context7_docs.forEach((doc, index) => {
+        contextText += `${doc}\n`;
+      });
+    }
+
+    // Process custom context
+    if (context.custom_context) {
+      contextText += '\n\n## Additional Context:\n';
+      contextText += `${context.custom_context}\n`;
+    }
+
+    return contextText;
+  }
+
   setupHandlers() {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
@@ -52,6 +99,48 @@ class LocalLLMProxyServer {
                 prompt: {
                   type: 'string',
                   description: 'The text prompt to generate from',
+                },
+                context: {
+                  type: 'object',
+                  description: 'Context information to enhance the response',
+                  properties: {
+                    past_chats: {
+                      type: 'array',
+                      description: 'Previous chat messages for context',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          role: { type: 'string' },
+                          content: { type: 'string' }
+                        }
+                      }
+                    },
+                    files: {
+                      type: 'array',
+                      description: 'Relevant file contents',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          path: { type: 'string' },
+                          content: { type: 'string' }
+                        }
+                      }
+                    },
+                    memory: {
+                      type: 'array',
+                      description: 'Relevant memory entries',
+                      items: { type: 'string' }
+                    },
+                    context7_docs: {
+                      type: 'array',
+                      description: 'Context7 documentation snippets',
+                      items: { type: 'string' }
+                    },
+                    custom_context: {
+                      type: 'string',
+                      description: 'Any additional context information'
+                    }
+                  }
                 },
                 max_tokens: {
                   type: 'number',
@@ -89,6 +178,48 @@ class LocalLLMProxyServer {
                     },
                     required: ['role', 'content'],
                   },
+                },
+                context: {
+                  type: 'object',
+                  description: 'Context information to enhance the response',
+                  properties: {
+                    past_chats: {
+                      type: 'array',
+                      description: 'Previous chat messages for context',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          role: { type: 'string' },
+                          content: { type: 'string' }
+                        }
+                      }
+                    },
+                    files: {
+                      type: 'array',
+                      description: 'Relevant file contents',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          path: { type: 'string' },
+                          content: { type: 'string' }
+                        }
+                      }
+                    },
+                    memory: {
+                      type: 'array',
+                      description: 'Relevant memory entries',
+                      items: { type: 'string' }
+                    },
+                    context7_docs: {
+                      type: 'array',
+                      description: 'Context7 documentation snippets',
+                      items: { type: 'string' }
+                    },
+                    custom_context: {
+                      type: 'string',
+                      description: 'Any additional context information'
+                    }
+                  }
                 },
                 max_tokens: {
                   type: 'number',
@@ -135,14 +266,18 @@ class LocalLLMProxyServer {
   }
 
   async handleTextGeneration(args) {
-    const { prompt, max_tokens = 1000, temperature = 0.7, use_local_first = true } = args;
+    const { prompt, context, max_tokens = 1000, temperature = 0.7, use_local_first = true } = args;
 
     if (use_local_first) {
       try {
+        // Process context and enhance prompt
+        const contextText = this.processContext(context);
+        const enhancedPrompt = contextText ? `${prompt}\n\n${contextText}` : prompt;
+
         // Try local LLM first
         const localResponse = await this.callLocalLLM({
           model: 'local',
-          prompt,
+          prompt: enhancedPrompt,
           max_tokens,
           temperature,
         });
@@ -167,7 +302,7 @@ class LocalLLMProxyServer {
         }
 
         // Try to refine the response using validation suggestions
-        const refinedResponse = await this.refineResponse(localResponse, prompt, validation);
+        const refinedResponse = await this.refineResponse(localResponse, prompt, validation, context);
         if (refinedResponse) {
           return {
             content: [
@@ -198,13 +333,33 @@ class LocalLLMProxyServer {
   }
 
   async handleChatCompletion(args) {
-    const { messages, max_tokens = 1000, temperature = 0.7 } = args;
+    const { messages, context, max_tokens = 1000, temperature = 0.7 } = args;
 
     try {
+      // Process context and enhance messages
+      const contextText = this.processContext(context);
+      let enhancedMessages = [...messages];
+      
+      if (contextText) {
+        // Add context as a system message or append to the last user message
+        const lastMessage = enhancedMessages[enhancedMessages.length - 1];
+        if (lastMessage && lastMessage.role === 'user') {
+          enhancedMessages[enhancedMessages.length - 1] = {
+            ...lastMessage,
+            content: `${lastMessage.content}\n\n${contextText}`
+          };
+        } else {
+          enhancedMessages.unshift({
+            role: 'system',
+            content: `Context information:\n${contextText}`
+          });
+        }
+      }
+
       // Try local LLM first
       const localResponse = await this.callLocalLLMChat({
         model: 'local',
-        messages,
+        messages: enhancedMessages,
         max_tokens,
         temperature,
       });
@@ -229,7 +384,7 @@ class LocalLLMProxyServer {
       }
 
       // Try to refine the response using validation suggestions
-      const refinedResponse = await this.refineResponse(localResponse, messages[messages.length - 1]?.content || '', validation);
+      const refinedResponse = await this.refineResponse(localResponse, messages[messages.length - 1]?.content || '', validation, context);
       if (refinedResponse) {
         return {
           content: [
@@ -395,12 +550,13 @@ Respond with ONLY a JSON object in this exact format:
     }
   }
 
-  async refineResponse(originalResponse, originalPrompt, validation) {
+  async refineResponse(originalResponse, originalPrompt, validation, context = null) {
     if (!this.validationConfig.enabled || !validation.suggestions || validation.suggestions.length === 0) {
       return null;
     }
 
     try {
+      const contextText = this.processContext(context);
       const refinementPrompt = `The following response was generated but needs improvement based on the validation feedback.
 
 ORIGINAL PROMPT: "${originalPrompt}"
@@ -410,7 +566,9 @@ ORIGINAL RESPONSE: "${originalResponse}"
 VALIDATION FEEDBACK: ${validation.reason}
 SUGGESTIONS: ${validation.suggestions.join(', ')}
 
-Please provide an improved version of the response that addresses the validation feedback while maintaining the core information. Make the response more relevant, complete, accurate, clear, and helpful.
+${contextText ? `\nCONTEXT INFORMATION:\n${contextText}\n` : ''}
+
+Please provide an improved version of the response that addresses the validation feedback while maintaining the core information. Make the response more relevant, complete, accurate, clear, and helpful. Use the context information to provide more accurate and relevant responses.
 
 IMPROVED RESPONSE:`;
 
