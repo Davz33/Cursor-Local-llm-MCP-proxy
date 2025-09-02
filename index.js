@@ -29,6 +29,13 @@ class LocalLLMProxyServer {
       'claude-3-sonnet',
     ];
 
+    // Configuration for LLM-based validation
+    this.validationConfig = {
+      enabled: process.env.LLM_VALIDATION_ENABLED === 'true',
+      useLocalValidator: process.env.USE_LOCAL_VALIDATOR === 'true',
+      maxRetries: parseInt(process.env.MAX_REFINEMENT_RETRIES) || 2,
+    };
+
     this.setupHandlers();
   }
 
