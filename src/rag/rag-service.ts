@@ -1,6 +1,7 @@
-import { Document, VectorStoreIndex, Settings, EngineResponse } from "llamaindex";
+import { Document, VectorStoreIndex, Settings, EngineResponse, storageContextFromDefaults } from "llamaindex";
 import { configureSettings } from "../config/llm-config.js";
 import fs from "fs/promises";
+import path from "path";
 
 export interface RAGQueryResult {
   query: string;
@@ -13,6 +14,8 @@ export interface IndexStatus {
   hasIndex: boolean;
   indexType: string;
   instanceId: string;
+  storagePath?: string;
+  isPersistent: boolean;
 }
 
 /**
@@ -20,20 +23,163 @@ export interface IndexStatus {
  */
 export class RAGService {
   private documentIndex: VectorStoreIndex | null = null;
+  private documents: Document[] = []; // Store original documents for persistence
   private instanceId: string;
+  private storagePath: string;
+  private isPersistent: boolean = false;
 
-  constructor() {
+  constructor(storagePath: string = './rag-storage') {
     // Create unique instance ID for tracking
     this.instanceId = `RAG_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.storagePath = path.resolve(storagePath);
     
     try {
       // Configure global settings (handles duplicate configuration internally)
       configureSettings();
+      
       console.error(`RAG Service [${this.instanceId}]: Initialized successfully`);
+      console.error(`RAG Service [${this.instanceId}]: Storage path: ${this.storagePath}`);
       console.error(`RAG Service [${this.instanceId}]: Document index initialized as:`, this.documentIndex);
     } catch (error) {
       console.error(`RAG Service [${this.instanceId}]: Failed to initialize:`, (error as Error).message);
       throw error;
+    }
+  }
+
+  /**
+   * Initialize the RAG service and load existing storage
+   */
+  async initialize(): Promise<void> {
+    try {
+      // Try to load existing storage on startup
+      await this.loadStorage();
+      console.error(`RAG Service [${this.instanceId}]: Initialization completed`);
+    } catch (error) {
+      console.error(`RAG Service [${this.instanceId}]: Failed to initialize:`, (error as Error).message);
+      // Don't throw error - allow service to continue without persistence
+    }
+  }
+
+  /**
+   * Load existing storage from disk
+   */
+  private async loadStorage(): Promise<void> {
+    try {
+      if (await this.storageExists()) {
+        console.error(`RAG Service [${this.instanceId}]: Loading existing storage from ${this.storagePath}`);
+        
+        // Load the stored documents and recreate the index
+        const documentsFile = path.join(this.storagePath, 'documents.json');
+        if (await this.fileExists(documentsFile)) {
+          const documentsData = await fs.readFile(documentsFile, 'utf-8');
+          const savedDocuments = JSON.parse(documentsData);
+          
+          // Recreate documents and store them
+          this.documents = savedDocuments.map((doc: any) => new Document({
+            text: doc.text,
+            id_: doc.id_,
+            metadata: doc.metadata
+          }));
+          
+          // Recreate the index from loaded documents
+          this.documentIndex = await VectorStoreIndex.fromDocuments(this.documents);
+          this.isPersistent = true;
+          console.error(`RAG Service [${this.instanceId}]: Successfully loaded ${this.documents.length} documents from storage`);
+        } else {
+          console.error(`RAG Service [${this.instanceId}]: No documents file found in storage`);
+        }
+      } else {
+        console.error(`RAG Service [${this.instanceId}]: No existing storage found at ${this.storagePath}`);
+      }
+    } catch (error) {
+      console.error(`RAG Service [${this.instanceId}]: Failed to load storage:`, (error as Error).message);
+      // Don't throw error - allow service to continue without persistence
+    }
+  }
+
+  /**
+   * Save current index to disk
+   */
+  async saveStorage(): Promise<void> {
+    try {
+      if (this.documentIndex && this.documents.length > 0) {
+        console.error(`RAG Service [${this.instanceId}]: Saving storage to ${this.storagePath}`);
+        
+        // Ensure storage directory exists
+        await fs.mkdir(this.storagePath, { recursive: true });
+        
+        // Save the documents as JSON
+        const documentsFile = path.join(this.storagePath, 'documents.json');
+        const documentsData = this.documents.map(doc => ({
+          text: doc.text,
+          id_: doc.id_,
+          metadata: doc.metadata
+        }));
+        
+        await fs.writeFile(documentsFile, JSON.stringify(documentsData, null, 2));
+        
+        // Save metadata
+        const storageMetadata = {
+          instanceId: this.instanceId,
+          timestamp: new Date().toISOString(),
+          documentCount: this.documents.length,
+          version: "1.0.0"
+        };
+        
+        await fs.writeFile(
+          path.join(this.storagePath, 'metadata.json'),
+          JSON.stringify(storageMetadata, null, 2)
+        );
+        
+        this.isPersistent = true;
+        console.error(`RAG Service [${this.instanceId}]: Successfully saved ${this.documents.length} documents to persistent storage`);
+      } else {
+        console.error(`RAG Service [${this.instanceId}]: No documents to save`);
+      }
+    } catch (error) {
+      console.error(`RAG Service [${this.instanceId}]: Failed to save storage:`, (error as Error).message);
+      throw new Error(`Failed to save RAG storage: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Check if storage exists on disk
+   */
+  private async storageExists(): Promise<boolean> {
+    try {
+      await fs.access(this.storagePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Check if a file exists
+   */
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Clear persistent storage
+   */
+  async clearStorage(): Promise<void> {
+    try {
+      if (await this.storageExists()) {
+        console.error(`RAG Service [${this.instanceId}]: Clearing storage at ${this.storagePath}`);
+        await fs.rm(this.storagePath, { recursive: true, force: true });
+        this.isPersistent = false;
+        console.error(`RAG Service [${this.instanceId}]: Storage cleared successfully`);
+      }
+    } catch (error) {
+      console.error(`RAG Service [${this.instanceId}]: Failed to clear storage:`, (error as Error).message);
+      throw new Error(`Failed to clear RAG storage: ${(error as Error).message}`);
     }
   }
 
@@ -50,6 +196,9 @@ export class RAGService {
         metadata: { source: filePath }
       });
       
+      // Add document to our documents array for persistence
+      this.documents.push(document);
+      
       if (!this.documentIndex) {
         console.error("RAG Service: Creating new VectorStoreIndex from document");
         this.documentIndex = await VectorStoreIndex.fromDocuments([document]);
@@ -58,6 +207,9 @@ export class RAGService {
         console.error("RAG Service: Adding document to existing index");
         await this.documentIndex.insert(document);
       }
+      
+      // Auto-save after indexing
+      await this.saveStorage();
       
       return `Successfully indexed document: ${filePath}`;
     } catch (error) {
@@ -78,6 +230,9 @@ export class RAGService {
         metadata: { source: "direct_text" }
       });
       
+      // Add document to our documents array for persistence
+      this.documents.push(textDocument);
+      
       console.error("RAG Service: Document created, checking if index exists");
       
       if (!this.documentIndex) {
@@ -89,6 +244,9 @@ export class RAGService {
         await this.documentIndex.insert(textDocument);
         console.error("RAG Service: Text document added to existing index");
       }
+      
+      // Auto-save after indexing
+      await this.saveStorage();
       
       console.error("RAG Service: Indexing completed successfully");
       return "Successfully indexed text content";
@@ -191,7 +349,9 @@ export class RAGService {
     const status: IndexStatus = {
       hasIndex: this.documentIndex !== null,
       indexType: this.documentIndex ? "VectorStoreIndex" : "none",
-      instanceId: this.instanceId
+      instanceId: this.instanceId,
+      storagePath: this.storagePath,
+      isPersistent: this.isPersistent
     };
     console.error(`RAG Service [${this.instanceId}]: Index status:`, status);
     return status;

@@ -31,6 +31,13 @@ export class AgenticService {
   }
 
   /**
+   * Initialize the agentic service
+   */
+  async initialize(): Promise<void> {
+    await this.ragService.initialize();
+  }
+
+  /**
    * Run agentic query with tool integration
    */
   async runAgenticQuery(prompt: string, options: AgenticOptions = {}): Promise<AgenticResult> {

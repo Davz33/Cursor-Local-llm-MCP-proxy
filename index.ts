@@ -3,5 +3,10 @@
 import { LocalLLMProxyServer } from "./src/mcp/mcp-server.js";
 
 // Start the server
-const server = new LocalLLMProxyServer();
-server.run().catch(console.error);
+async function startServer() {
+  const server = new LocalLLMProxyServer();
+  await server.initialize();
+  await server.run();
+}
+
+startServer().catch(console.error);

@@ -59,6 +59,13 @@ export class LocalLLMProxyServer {
     this.setupHandlers();
   }
 
+  /**
+   * Initialize the MCP server
+   */
+  async initialize(): Promise<void> {
+    await this.agenticService.initialize();
+  }
+
   setupHandlers(): void {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -181,6 +188,30 @@ export class LocalLLMProxyServer {
               },
             },
           },
+          {
+            name: "save_rag_storage",
+            description: "Manually save RAG storage to disk",
+            inputSchema: {
+              type: "object",
+              properties: {},
+            },
+          },
+          {
+            name: "clear_rag_storage",
+            description: "Clear all persistent RAG storage from disk",
+            inputSchema: {
+              type: "object",
+              properties: {},
+            },
+          },
+          {
+            name: "rag_storage_status",
+            description: "Get status of RAG storage and persistence",
+            inputSchema: {
+              type: "object",
+              properties: {},
+            },
+          },
         ],
       };
     });
@@ -207,6 +238,12 @@ export class LocalLLMProxyServer {
             return result;
           case "index_document":
             return await this.handleIndexDocument(args as unknown as IndexDocumentArgs);
+          case "save_rag_storage":
+            return await this.handleSaveRAGStorage();
+          case "clear_rag_storage":
+            return await this.handleClearRAGStorage();
+          case "rag_storage_status":
+            return await this.handleRAGStorageStatus();
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -344,9 +381,95 @@ export class LocalLLMProxyServer {
     }
   }
 
+  /**
+   * Handle save RAG storage request
+   */
+  private async handleSaveRAGStorage() {
+    try {
+      await this.ragService.saveStorage();
+      return {
+        content: [
+          {
+            type: "text",
+            text: "RAG storage saved successfully to disk",
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(`Failed to save RAG storage: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Handle clear RAG storage request
+   */
+  private async handleClearRAGStorage() {
+    try {
+      await this.ragService.clearStorage();
+      return {
+        content: [
+          {
+            type: "text",
+            text: "RAG storage cleared successfully from disk",
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(`Failed to clear RAG storage: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Handle RAG storage status request
+   */
+  private async handleRAGStorageStatus() {
+    try {
+      const status = this.ragService.getIndexStatus();
+      return {
+        content: [
+          {
+            type: "text",
+            text: `RAG Storage Status:
+- Has Index: ${status.hasIndex}
+- Index Type: ${status.indexType}
+- Instance ID: ${status.instanceId}
+- Storage Path: ${status.storagePath}
+- Is Persistent: ${status.isPersistent}`,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(`Failed to get RAG storage status: ${(error as Error).message}`);
+    }
+  }
+
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error("Local LLM Proxy MCP Server with LlamaIndex.TS integration running on stdio");
+    
+    // Setup graceful shutdown
+    this.setupGracefulShutdown();
+  }
+
+  /**
+   * Setup graceful shutdown handlers
+   */
+  private setupGracefulShutdown(): void {
+    const shutdown = async (signal: string) => {
+      console.error(`Received ${signal}, shutting down gracefully...`);
+      try {
+        // Save RAG storage before shutdown
+        await this.ragService.saveStorage();
+        console.error("RAG storage saved successfully");
+      } catch (error) {
+        console.error("Failed to save RAG storage on shutdown:", (error as Error).message);
+      }
+      process.exit(0);
+    };
+
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGHUP', () => shutdown('SIGHUP'));
   }
 }
