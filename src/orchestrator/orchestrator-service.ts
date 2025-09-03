@@ -141,10 +141,20 @@ export class OrchestratorService {
       // Step 5: Decide on fallback
       let finalResponse = response;
       let fallbackUsed = false;
+      
+      // Special handling for web search queries - don't fallback if Sonar was used
+      const isWebSearchQuery = this.isWebSearchQuery(prompt);
+      const usedSonar = toolsUsed.some(tool => tool.includes('sonar_query'));
+      
       if (validationResult?.shouldFallback && this.options.fallbackToCursor) {
-        console.error("Orchestrator: Response validation failed, using fallback");
-        finalResponse = await this.fallbackToCursor(prompt, context);
-        fallbackUsed = true;
+        if (isWebSearchQuery && usedSonar) {
+          console.error("Orchestrator: Web search query with Sonar - not falling back to Cursor");
+          // Keep the Sonar response even if validation suggests fallback
+        } else {
+          console.error("Orchestrator: Response validation failed, using fallback");
+          finalResponse = await this.fallbackToCursor(prompt, context);
+          fallbackUsed = true;
+        }
       }
 
       // Step 6: Save to RAG if needed
@@ -256,7 +266,10 @@ Request: "${prompt}"
 Available Tools:
 ${availableTools.map(t => `- ${t.name} (${t.serverName}): ${t.description}`).join('\n')}
 
-IMPORTANT: For complex analysis, planning, problem-solving, or multi-step reasoning tasks, ALWAYS include "sequentialthinking" tool.
+CRITICAL PRIORITY RULES:
+1. For ANY request about recent news, current events, real-time information, weather, market data, or location-based queries, ALWAYS use "sonar_query" FIRST
+2. For complex analysis, planning, problem-solving, or multi-step reasoning tasks, ALWAYS include "sequentialthinking" tool
+3. For web search, news, or real-time information, prioritize "sonar_query" over other tools
 
 Orchestration Rules:
 ${rules}
@@ -282,7 +295,37 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
     const selectedTools: MCPTool[] = [];
     const promptLower = prompt.toLowerCase();
 
-    // Check for sequential thinking patterns first
+    // PRIORITY 1: Check for web search/real-time information patterns FIRST
+    const webSearchPatterns = [
+      'recent', 'latest', 'current', 'news', 'today', 'now', '2024', '2025',
+      'what happened', 'what is happening', 'breaking', 'update', 'developments',
+      'events', 'weather', 'market', 'stock', 'price', 'forecast', 'prediction',
+      'trends', 'statistics', 'data', 'information', 'search', 'find', 'look up',
+      'zürich', 'zurich', 'switzerland', 'city', 'location', 'place'
+    ];
+
+    const shouldUseWebSearch = webSearchPatterns.some(pattern => 
+      promptLower.includes(pattern)
+    );
+
+    console.error(`Orchestrator: Web search check - prompt: "${promptLower}"`);
+    console.error(`Orchestrator: Should use web search (Sonar): ${shouldUseWebSearch}`);
+
+    // ALWAYS prioritize Sonar for web search queries
+    if (shouldUseWebSearch) {
+      const sonarTool = availableTools.find(tool => tool.name === 'sonar_query');
+      if (sonarTool) {
+        selectedTools.push(sonarTool);
+        console.error("Orchestrator: Added Sonar tool for web search/real-time information");
+        // For web search, we might not need sequential thinking unless it's complex analysis
+        if (!promptLower.includes('analyze') && !promptLower.includes('complex')) {
+          console.error(`Orchestrator: Selected tools for web search: ${selectedTools.map(t => t.name).join(', ')}`);
+          return selectedTools;
+        }
+      }
+    }
+
+    // PRIORITY 2: Check for sequential thinking patterns
     const sequentialThinkingPatterns = [
       'analyze', 'analysis', 'think', 'thinking', 'reason', 'reasoning',
       'plan', 'planning', 'design', 'designing', 'strategy', 'strategic',
@@ -341,6 +384,22 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
   }
 
   /**
+   * Check if a prompt is a web search query
+   */
+  private isWebSearchQuery(prompt: string): boolean {
+    const promptLower = prompt.toLowerCase();
+    const webSearchPatterns = [
+      'recent', 'latest', 'current', 'news', 'today', 'now', '2024', '2025',
+      'what happened', 'what is happening', 'breaking', 'update', 'developments',
+      'events', 'weather', 'market', 'stock', 'price', 'forecast', 'prediction',
+      'trends', 'statistics', 'data', 'information', 'search', 'find', 'look up',
+      'zürich', 'zurich', 'switzerland', 'city', 'location', 'place'
+    ];
+    
+    return webSearchPatterns.some(pattern => promptLower.includes(pattern));
+  }
+
+  /**
    * Get smart defaults for tool arguments based on tool name and context
    */
   private getSmartDefaults(tool: MCPTool, prompt: string, context: Record<string, any>): any {
@@ -363,6 +422,15 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
           entityType: "project",
           observations: [prompt]
         }]
+      };
+    }
+    
+    if (toolName.includes('sonar') || toolName.includes('query')) {
+      return {
+        query: prompt,
+        max_tokens: 1500,
+        temperature: 0.7,
+        model: "sonar-pro"
       };
     }
     
