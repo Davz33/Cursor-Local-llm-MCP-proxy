@@ -121,6 +121,15 @@ graph TB
 - Automatic document loading on server startup
 - File-based persistence with configurable storage path
 
+### 🎯 MCP Orchestrator
+- **Tool Discovery**: Automatically discovers and connects to other MCP servers
+- **Intelligent Tool Selection**: Uses rule-based logic to select appropriate tools for queries
+- **Web Search Priority**: Automatically routes web search queries to Sonar API
+- **Dual Rule System**: Separates general functionality rules from personal preferences
+- **Fallback Communication**: Provides targeted error reporting for Cursor fallback
+- **Context-Aware Processing**: Gathers context from multiple MCP servers before tool execution
+- **Validation & Quality Control**: Ensures response quality and accuracy
+
 ### 🛠 Available MCP Tools
 1. `generate_text_v2` - Generate text with agentic capabilities
 2. `chat_completion` - Chat completion with tool integration
@@ -256,6 +265,33 @@ For real-time information gathering capabilities, the server includes Perplexity
 - Environment variable setup
 - Usage examples
 - Cost considerations
+
+### Orchestration Rules System
+
+The MCP orchestrator uses a dual-rule system to separate general functionality from personal preferences:
+
+#### General Rules (Repository-tracked)
+- **Location**: `src/orchestrator/general-orchestration-rules.txt`
+- **Purpose**: Core MCP server functionality and tool orchestration logic
+- **Content**: Tool selection, error handling, web search patterns, memory operations, thinking operations
+- **Maintenance**: Version-controlled and shared across all users
+
+#### Personal Rules (User-specific)
+- **Location**: `$HOME/local-llm-proxy/personal-orchestration-rules.txt`
+- **Purpose**: Subjective preferences and personal workflow rules
+- **Content**: Git preferences, coding style, development workflow, personal context preferences
+- **Maintenance**: User-specific and customizable
+
+#### Environment Variables
+- `MCP_PERSONAL_RULES_PATH`: Custom path for personal rules (optional)
+- Default personal rules location: `$HOME/local-llm-proxy/personal-orchestration-rules.txt`
+
+#### Rule Combination
+The orchestrator automatically combines both rule sets:
+1. Loads general rules from the repository
+2. Loads personal rules from user directory (if exists)
+3. Combines them for comprehensive orchestration behavior
+4. Falls back gracefully if either file is missing
 
 ## 📋 API Examples
 
