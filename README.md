@@ -23,6 +23,7 @@ graph TB
     AgenticService --> MathTool[➕ Math Tool]
     AgenticService --> FileSystemTool[📁 File System Tool]
     AgenticService --> RAGTool[🔍 RAG Tool]
+    AgenticService --> SonarTool[🌐 Sonar API Tool]
     
     %% RAG Persistence Layer
     RAGService --> VectorIndex[🗃️ Vector Store Index]
@@ -38,6 +39,10 @@ graph TB
     %% Embedding Integration
     RAGService --> EmbeddingModel[🔤 HuggingFace Embeddings]
     
+    %% External API Integration
+    SonarTool --> SonarAPI[🔍 Perplexity Sonar API]
+    SonarAPI --> RealTimeData[📡 Real-time Information]
+    
     %% Data Flow
     User -->|"1. Query/Request"| Cursor
     Cursor -->|"2. MCP Protocol"| MCPClient
@@ -49,6 +54,7 @@ graph TB
     AgenticService -->|"5a. Tool Selection"| MathTool
     AgenticService -->|"5b. Tool Selection"| FileSystemTool
     AgenticService -->|"5c. Tool Selection"| RAGTool
+    AgenticService -->|"5d. Web Search Query"| SonarTool
     
     RAGService -->|"6a. Document Indexing"| VectorIndex
     RAGService -->|"6b. Auto-Save"| DocumentStorage
@@ -57,25 +63,31 @@ graph TB
     VectorIndex -->|"8. Query Processing"| EmbeddingModel
     EmbeddingModel -->|"9. Vector Search"| VectorIndex
     
-    AgenticService -->|"10. LLM Generation"| LLMConfig
-    RAGService -->|"11. LLM Generation"| LLMConfig
-    LLMConfig -->|"12. API Call"| LMStudio
-    LMStudio -->|"13. Model Inference"| LocalModel
+    SonarTool -->|"10. API Request"| SonarAPI
+    SonarAPI -->|"11. Real-time Search"| RealTimeData
+    RealTimeData -->|"12. Search Results"| SonarAPI
+    SonarAPI -->|"13. API Response"| SonarTool
     
-    LocalModel -->|"14. Response"| LMStudio
-    LMStudio -->|"15. API Response"| LLMConfig
-    LLMConfig -->|"16. Processed Response"| AgenticService
-    LLMConfig -->|"17. Processed Response"| RAGService
+    AgenticService -->|"14. LLM Generation"| LLMConfig
+    RAGService -->|"15. LLM Generation"| LLMConfig
+    LLMConfig -->|"16. API Call"| LMStudio
+    LMStudio -->|"17. Model Inference"| LocalModel
     
-    AgenticService -->|"18. Final Response"| MCPServer
-    RAGService -->|"19. Final Response"| MCPServer
-    MCPServer -->|"20. MCP Response"| MCPClient
-    MCPClient -->|"21. Display Result"| Cursor
-    Cursor -->|"22. Show to User"| User
+    LocalModel -->|"18. Response"| LMStudio
+    LMStudio -->|"19. API Response"| LLMConfig
+    LLMConfig -->|"20. Processed Response"| AgenticService
+    LLMConfig -->|"21. Processed Response"| RAGService
+    
+    AgenticService -->|"22. Final Response"| MCPServer
+    RAGService -->|"23. Final Response"| MCPServer
+    SonarTool -->|"24. Final Response"| MCPServer
+    MCPServer -->|"25. MCP Response"| MCPClient
+    MCPClient -->|"26. Display Result"| Cursor
+    Cursor -->|"27. Show to User"| User
     
     %% Persistence Flow
-    DiskStorage -.->|"23. Load on Startup"| DocumentStorage
-    DocumentStorage -.->|"24. Recreate Index"| VectorIndex
+    DiskStorage -.->|"28. Load on Startup"| DocumentStorage
+    DocumentStorage -.->|"29. Recreate Index"| VectorIndex
     
     %% Styling
     classDef userLayer fill:#e1f5fe,stroke:#01579b,stroke-width:2px
@@ -88,9 +100,10 @@ graph TB
     class User,Cursor userLayer
     class MCPClient,MCPServer mcpLayer
     class AgenticService,RAGService serviceLayer
-    class MathTool,FileSystemTool,RAGTool toolLayer
+    class MathTool,FileSystemTool,RAGTool,SonarTool toolLayer
     class VectorIndex,DocumentStorage,DiskStorage storageLayer
     class LLMConfig,LMStudio,LocalModel,EmbeddingModel llmLayer
+    class SonarAPI,RealTimeData toolLayer
 ```
 
 ## 🚀 Features
