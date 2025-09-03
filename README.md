@@ -123,6 +123,13 @@ graph TB
 - Configurable base URL and model selection
 - Environment variable configuration
 
+### 🔄 Intelligent Validation & Fallback System
+- **Heuristic-based validation** for response quality assessment
+- **Automatic fallback** to cloud LLMs when local responses are inadequate
+- **Smart tool selection** with enhanced sequential thinking integration
+- **Real-time validation** checking for errors, inability expressions, and response completeness
+- **Configurable thresholds** for confidence scoring and fallback triggers
+
 ## 📦 Installation
 
 ### Prerequisites
