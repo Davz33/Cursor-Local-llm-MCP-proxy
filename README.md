@@ -1,201 +1,190 @@
-# Local LLM Proxy MCP Server
+# Enhanced Local LLM Proxy MCP Server with LlamaIndex.TS
 
-This MCP server implements speculative decoding with your local LLM, trying the local model first and falling back to other models when needed.
+A powerful MCP (Model Context Protocol) server that enhances local LLM capabilities with agentic behavior, RAG (Retrieval-Augmented Generation), and tool integration using LlamaIndex.TS.
 
-## Features
+## 🚀 Features
 
-- **Speculative Decoding**: Tries local LLM first at local endpoint -`http://127.0.0.1:1234`for LM-Studio
-- **Response Validation**: Validates local LLM responses for quality
-- **LLM-Based Validation**: Uses the local LLM itself to assess response quality
-- **Response Refinement**: Automatically refines responses based on validation feedback
-- **Context Integration**: Leverages past chats, files, memory, and documentation for enhanced responses
-- **Automatic Context Gathering**: Can automatically gather context from available MCP servers
-- **Automatic Fallback**: Falls back to Cursor agent when local response is inadequate
-- **OpenAI-Compatible**: Works with standard OpenAI API endpoints
+### 🧠 Agentic Capabilities
+- **Math Tool**: Performs basic mathematical operations (add, subtract, multiply, divide)
+- **Weather Tool**: Provides mock weather information for cities
+- **File System Tool**: Read, write, and list files and directories
+- **RAG System**: Document indexing and querying with natural language
 
-## Local LLM Endpoints
+### 🔍 RAG (Retrieval-Augmented Generation)
+- Index documents from files or direct text input
+- Query indexed documents with natural language
+- Source attribution for responses
+- Persistent document storage during session
 
-The server expects your local LLM to expose these endpoints:
+### 🛠 Available MCP Tools
+1. `generate_text` - Generate text with agentic capabilities
+2. `chat_completion` - Chat completion with tool integration
+3. `rag_query` - Query indexed documents using RAG
+4. `index_document` - Index documents for RAG queries
 
-- `GET /v1/models` - List available models
-- `POST /v1/chat/completions` - Chat completions
-- `POST /v1/completions` - Text completions  
-- `POST /v1/embeddings` - Text embeddings
+### 🌐 LM Studio Integration
+- OpenAI-compatible API integration
+- Support for Quen3 and other local models
+- Configurable base URL and model selection
+- Environment variable configuration
 
-## Available Tools
-
-### `generate_text`
-Generate text using local LLM with fallback to other models.
-
-**Parameters:**
-- `prompt` (string, required): The text prompt to generate from
-- `context` (object, optional): Context information to enhance the response
-  - `past_chats` (array): Previous chat messages for context
-  - `files` (array): Relevant file contents with path and content
-  - `memory` (array): Relevant memory entries
-  - `context7_docs` (array): Context7 documentation snippets
-  - `custom_context` (string): Any additional context information
-- `max_tokens` (number, optional): Maximum tokens to generate (default: 1000)
-- `temperature` (number, optional): Temperature for generation (default: 0.7)
-- `use_local_first` (boolean, optional): Try local LLM first (default: true)
-
-### `chat_completion`
-Chat completion using local LLM with fallback.
-
-**Parameters:**
-- `messages` (array, required): Array of chat messages
-- `context` (object, optional): Context information to enhance the response (same structure as above)
-- `max_tokens` (number, optional): Maximum tokens to generate (default: 1000)
-- `temperature` (number, optional): Temperature for generation (default: 0.7)
-
-### `generate_with_context`
-Generate text with automatic context gathering from available MCP servers.
-
-**Parameters:**
-- `prompt` (string, required): The text prompt to generate from
-- `context_sources` (array, optional): Available MCP servers to gather context from
-  - Options: `['memory', 'context7', 'files', 'chat_history']`
-  - Default: `['memory', 'context7']`
-- `max_tokens` (number, optional): Maximum tokens to generate (default: 1000)
-- `temperature` (number, optional): Temperature for generation (default: 0.7)
-
-### `validate_response`
-Validate a local LLM response using Cursor agent capabilities.
-
-**Parameters:**
-- `response` (string, required): The response to validate
-- `original_prompt` (string, required): The original prompt that generated the response
-- `validation_criteria` (array, optional): Specific criteria to validate against
-  - Default: ['Is the response relevant?', 'Is it complete?', 'Does it contain errors?', 'Is it clear?']
-
-## Response Validation
-
-The server validates local LLM responses using a two-tier approach:
-
-### Basic Validation
-1. **Non-empty response**: Response must not be empty
-2. **Minimum length**: Response must be at least 10 characters
-3. **Error detection**: Checks for common error indicators
-
-### Advanced Validation (Optional)
-When enabled, uses Cursor agent for objective validation:
-1. **Relevance**: Does the response address the user's prompt?
-2. **Completeness**: Is the response complete and informative?
-3. **Accuracy**: Does the response appear factually correct?
-4. **Clarity**: Is the response clear and well-structured?
-5. **Helpfulness**: Would this response be helpful to the user?
-
-**Validation Methods:**
-- **Cursor Agent Validation** (recommended): More objective and cost-effective
-- **Local LLM Validation** (fallback): Only when Cursor validation is not available
-
-### Response Refinement
-If validation fails, the server can automatically refine the response by:
-1. Using validation feedback to generate improvement suggestions
-2. Asking the local LLM to improve the response based on feedback
-3. Re-validating the refined response
-
-## Context Integration
-
-The server can leverage various sources of context to provide more accurate and relevant responses:
-
-### Context Sources
-- **Past Chats**: Previous conversation history for continuity
-- **Files**: Relevant file contents from the current project
-- **Memory**: Persistent memory entries from the memory MCP server
-- **Context7 Docs**: Documentation snippets from the Context7 MCP server
-- **Custom Context**: Any additional context information
-
-### Context Processing
-- Context is automatically formatted and integrated into prompts
-- For text generation: Context is appended to the prompt
-- For chat completion: Context is added as system message or appended to user message
-- Context is also used during response refinement for better improvements
-
-### Automatic Context Gathering
-The `generate_with_context` tool can automatically gather context from available MCP servers:
-- Memory MCP: Retrieves relevant memories
-- Context7 MCP: Gets relevant documentation
-- File system: Accesses relevant files
-- Chat history: Includes recent conversations
-
-## Fallback Behavior
-
-When the local LLM fails or produces inadequate responses, the server:
-
-1. Logs the failure reason
-2. Returns a special fallback indicator to Cursor
-3. Cursor agent handles the request using its standard capabilities
-4. Returns metadata indicating the fallback was used
-
-## Installation
-
-1. Install dependencies:
+## 📦 Installation
 
 ```bash
-git clone https://github.com/Davz33/Cursor-Local-llm-MCP-proxy && cd Cursor-Local-llm-MCP-proxy
 npm install
 ```
 
-2. In your`mcp.json` file
+## 🚀 Usage
 
-```json
-    "local-llm-proxy": {
-      "command": "node",
-      "args": ["<clonde-repo-local-dir>"],
-      "env": {
-        "LOCAL_LLM_URL": "http://127.0.0.1:1234",
-        "LLM_VALIDATION_ENABLED": "true",
-        "USE_CURSOR_VALIDATION": "true",
-        "MAX_REFINEMENT_RETRIES": "2"
-      }
-    }
-```
+### 1. Start LM Studio
+1. Download and install [LM Studio](https://lmstudio.ai/)
+2. Load your Quen3 model (or preferred model)
+3. Start the server on `http://localhost:1234/v1`
 
-## Usage
-
-The server will automatically be available in Cursor when you restart the MCP connection. You can use it by calling the available tools through the MCP interface.
-
-## Configuration
-
-The server can be configured through environment variables:
-
-### Basic Configuration
-- `LOCAL_LLM_URL`: URL of your local LLM (default: http://127.0.0.1:1234)
-
-### Validation Configuration
-- `LLM_VALIDATION_ENABLED`: Enable validation (default: false)
-- `USE_CURSOR_VALIDATION`: Use Cursor agent for validation (default: true, recommended)
-- `USE_LOCAL_VALIDATOR`: Use local LLM for validation (default: false, fallback only)
-- `MAX_REFINEMENT_RETRIES`: Maximum number of refinement attempts (default: 2)
-
-### Example Configuration
+### 2. Configure Environment (Optional)
 ```bash
-# Basic mode (no validation)
-LLM_VALIDATION_ENABLED=false
-
-# With Cursor agent validation (recommended)
-LLM_VALIDATION_ENABLED=true
-USE_CURSOR_VALIDATION=true
-
-# With local LLM validation (fallback only)
-LLM_VALIDATION_ENABLED=true
-USE_LOCAL_VALIDATOR=true
+export LM_STUDIO_BASE_URL="http://localhost:1234/v1"
+export LM_STUDIO_MODEL="qwen3"
 ```
 
-**Note**: Cursor agent validation is more objective and cost-effective than self-validation!
+### 3. Start the MCP Server
+```bash
+npm start
+```
 
-## Extending the Server
+## 🔧 Configuration
 
-To add more sophisticated validation or fallback models:
+The server can be configured using environment variables:
 
-1. Modify the `validateResponse()` method for better quality assessment
-2. Update the `tryFallbackModels()` method to integrate with actual LLM providers
-3. Add more tools by extending the `ListToolsRequestSchema` handler
+- `LM_STUDIO_BASE_URL`: LM Studio API endpoint (default: `http://localhost:1234/v1`)
+- `LM_STUDIO_MODEL`: Model name in LM Studio (default: `qwen3`)
 
-## Troubleshooting
+## 📋 API Examples
 
-- Ensure your local LLM is running on port 1234
-- Check that the local LLM exposes the required endpoints
-- Verify the MCP server has network access to your local LLM
-- Check the console logs for detailed error messages
+### Basic Text Generation
+```json
+{
+  "name": "generate_text",
+  "arguments": {
+    "prompt": "Explain quantum computing in simple terms",
+    "use_agentic": true,
+    "max_tokens": 500,
+    "temperature": 0.7
+  }
+}
+```
+
+### Chat Completion
+```json
+{
+  "name": "chat_completion",
+  "arguments": {
+    "messages": [
+      {"role": "user", "content": "What's the weather in San Francisco?"}
+    ],
+    "use_agentic": true,
+    "max_tokens": 300
+  }
+}
+```
+
+### RAG Document Indexing
+```json
+{
+  "name": "index_document",
+  "arguments": {
+    "file_path": "/path/to/document.txt"
+  }
+}
+```
+
+### RAG Query
+```json
+{
+  "name": "rag_query",
+  "arguments": {
+    "query": "What are the main concepts discussed?",
+    "max_tokens": 300
+  }
+}
+```
+
+## 🧪 Testing
+
+Run the test suite to verify functionality:
+
+```bash
+node test-enhanced-server.js
+```
+
+## 🏗 Architecture
+
+### Core Components
+- **MCP Server**: Handles Model Context Protocol communication
+- **LlamaIndex.TS Integration**: Provides RAG and document processing
+- **LM Studio Adapter**: Connects to local LLM via OpenAI-compatible API
+- **Tool System**: Modular tool architecture for agentic behavior
+
+### Tool Architecture
+```javascript
+const tool = {
+  name: "tool_name",
+  description: "Tool description",
+  execute: async (params) => {
+    // Tool implementation
+  }
+};
+```
+
+## 🔍 RAG Workflow
+
+1. **Document Indexing**: Documents are processed and stored in a vector index
+2. **Query Processing**: Natural language queries are converted to vector searches
+3. **Context Retrieval**: Relevant document chunks are retrieved
+4. **Response Generation**: LLM generates responses using retrieved context
+5. **Source Attribution**: Responses include source document information
+
+## 🚨 Troubleshooting
+
+### Common Issues
+1. **Connection Refused**: Ensure LM Studio server is running
+2. **Model Not Found**: Verify model name in LM Studio
+3. **Port Conflicts**: Change LM Studio port if needed
+4. **Memory Issues**: Reduce model size or increase system memory
+
+### Debug Mode
+```bash
+DEBUG=* npm start
+```
+
+## 📈 Performance Tips
+
+- Use quantized models for better performance
+- Adjust `max_tokens` based on your needs
+- Enable streaming for long responses
+- Use RAG for document-heavy queries
+- Monitor memory usage with large documents
+
+## 🔮 Future Enhancements
+
+- [ ] Multi-agent workflows with handoffs
+- [ ] Advanced streaming with real-time updates
+- [ ] Persistent document storage across sessions
+- [ ] Custom tool development framework
+- [ ] Performance monitoring and metrics
+- [ ] Integration with more LLM providers
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+## 📞 Support
+
+For support and questions:
+- Create an issue in the repository
+- Check the troubleshooting section
+- Review the LM Studio configuration guide

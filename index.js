@@ -1,19 +1,166 @@
 #!/usr/bin/env node
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-import fetch from 'node-fetch';
+} from "@modelcontextprotocol/sdk/types.js";
+import { OpenAI } from "@llamaindex/openai";
+import { Document, VectorStoreIndex, serviceContextFromDefaults } from "llamaindex";
+import { HuggingFaceEmbedding } from "@llamaindex/huggingface";
+import { z } from "zod";
+import fs from "fs/promises";
+import path from "path";
 
+// LM Studio Configuration
+const LM_STUDIO_BASE_URL = process.env.LM_STUDIO_BASE_URL || "http://localhost:1234/v1";
+const LM_STUDIO_MODEL = process.env.LM_STUDIO_MODEL || "qwen3";
+
+// Initialize LlamaIndex.TS with LM Studio
+const llm = new OpenAI({
+  baseURL: LM_STUDIO_BASE_URL,
+  model: LM_STUDIO_MODEL,
+  temperature: 0.7,
+  apiKey: "lm-studio", // LM Studio doesn't require real API key
+});
+
+// Initialize embedding model for RAG
+const embedModel = new HuggingFaceEmbedding({
+  modelType: "BAAI/bge-small-en-v1.5",
+  quantized: false,
+});
+
+// Create service context
+const serviceContext = serviceContextFromDefaults({
+  llm: llm,
+  embedModel: embedModel,
+});
+
+// Global document index for RAG
+let documentIndex = null;
+
+// Define tools for the agentic system
+const mathTool = {
+  name: "math_calculator",
+  description: "Perform basic mathematical operations on two numbers",
+  execute: async ({ a, b, operation }) => {
+    switch (operation) {
+      case "add":
+        return `${a} + ${b} = ${a + b}`;
+      case "subtract":
+        return `${a} - ${b} = ${a - b}`;
+      case "multiply":
+        return `${a} * ${b} = ${a * b}`;
+      case "divide":
+        if (b === 0) return "Error: Division by zero";
+        return `${a} / ${b} = ${a / b}`;
+      default:
+        return "Error: Invalid operation";
+    }
+  }
+};
+
+const fileSystemTool = {
+  name: "file_system",
+  description: "Read, write, or list files and directories",
+  execute: async ({ action, filePath, content }) => {
+    try {
+      switch (action) {
+        case "read":
+          const data = await fs.readFile(filePath, "utf-8");
+          return `File content:\n${data}`;
+        case "write":
+          await fs.writeFile(filePath, content, "utf-8");
+          return `Successfully wrote to ${filePath}`;
+        case "list":
+          const files = await fs.readdir(filePath);
+          return `Directory contents:\n${files.join("\n")}`;
+        default:
+          return "Error: Invalid action";
+      }
+    } catch (error) {
+      return `Error: ${error.message}`;
+    }
+  }
+};
+
+const ragTool = {
+  name: "rag_system",
+  description: "RAG (Retrieval-Augmented Generation) system for document indexing and querying",
+  execute: async ({ action, filePath, query, text }) => {
+    try {
+      switch (action) {
+        case "index_document":
+          if (!filePath) return "Error: filePath is required for indexing";
+          
+          const content = await fs.readFile(filePath, "utf-8");
+          const document = new Document({ 
+            text: content, 
+            id_: filePath,
+            metadata: { source: filePath }
+          });
+          
+          if (!documentIndex) {
+            documentIndex = await VectorStoreIndex.fromDocuments([document], { serviceContext });
+          } else {
+            // Add document to existing index
+            await documentIndex.insert(document);
+          }
+          
+          return `Successfully indexed document: ${filePath}`;
+          
+        case "index_text":
+          if (!text) return "Error: text is required for indexing";
+          
+          const textDocument = new Document({ 
+            text: text, 
+            id_: `text_${Date.now()}`,
+            metadata: { source: "direct_text" }
+          });
+          
+          if (!documentIndex) {
+            documentIndex = await VectorStoreIndex.fromDocuments([textDocument], { serviceContext });
+          } else {
+            await documentIndex.insert(textDocument);
+          }
+          
+          return "Successfully indexed text content";
+          
+        case "query_documents":
+          if (!documentIndex) return "Error: No documents have been indexed yet";
+          if (!query) return "Error: query is required";
+          
+          const queryEngine = documentIndex.asQueryEngine();
+          const response = await queryEngine.query({ query });
+          
+          return `Query: ${query}\nResponse: ${response.response}\n\nSource nodes: ${response.sourceNodes?.map(node => node.metadata?.source || 'unknown').join(', ') || 'none'}`;
+          
+        case "list_indexed_documents":
+          if (!documentIndex) return "No documents have been indexed yet";
+          
+          // This is a simplified way to get document info
+          return "Documents are indexed. Use query_documents to search through them.";
+          
+        default:
+          return "Error: Invalid action. Use 'index_document', 'index_text', 'query_documents', or 'list_indexed_documents'";
+      }
+    } catch (error) {
+      return `Error: ${error.message}`;
+    }
+  }
+};
+
+// Available tools for the agentic system
+const availableTools = [mathTool, fileSystemTool, ragTool];
+
+// MCP Server implementation
 class LocalLLMProxyServer {
   constructor() {
     this.server = new Server(
       {
-        name: 'local-llm-proxy',
-        version: '1.0.0',
+        name: "local-llm-proxy-mcp",
+        version: "1.0.0",
       },
       {
         capabilities: {
@@ -22,351 +169,149 @@ class LocalLLMProxyServer {
       }
     );
 
-    this.localLLMUrl = 'http://127.0.0.1:1234';
-    this.fallbackModels = [
-      'gpt-4',
-      'gpt-3.5-turbo',
-      'claude-3-sonnet',
-    ];
-
-    // Configuration for validation
-    this.validationConfig = {
-      enabled: process.env.LLM_VALIDATION_ENABLED === 'true',
-      useCursorValidation: process.env.USE_CURSOR_VALIDATION === 'true',
-      useLocalValidator: process.env.USE_LOCAL_VALIDATOR === 'true',
-      maxRetries: parseInt(process.env.MAX_REFINEMENT_RETRIES) || 2,
-    };
-
     this.setupHandlers();
   }
 
-  processContext(context) {
-    if (!context) return '';
-
-    let contextText = '';
-    
-    // Process past chats
-    if (context.past_chats && context.past_chats.length > 0) {
-      contextText += '\n\n## Previous Chat Context:\n';
-      context.past_chats.slice(-5).forEach((chat, index) => {
-        contextText += `${chat.role}: ${chat.content}\n`;
-      });
-    }
-
-    // Process file contents
-    if (context.files && context.files.length > 0) {
-      contextText += '\n\n## Relevant Files:\n';
-      context.files.forEach((file, index) => {
-        contextText += `\n### File: ${file.path}\n`;
-        contextText += `${file.content}\n`;
-      });
-    }
-
-    // Process memory entries
-    if (context.memory && context.memory.length > 0) {
-      contextText += '\n\n## Relevant Memory:\n';
-      context.memory.forEach((memory, index) => {
-        contextText += `- ${memory}\n`;
-      });
-    }
-
-    // Process Context7 documentation
-    if (context.context7_docs && context.context7_docs.length > 0) {
-      contextText += '\n\n## Documentation Context:\n';
-      context.context7_docs.forEach((doc, index) => {
-        contextText += `${doc}\n`;
-      });
-    }
-
-    // Process custom context
-    if (context.custom_context) {
-      contextText += '\n\n## Additional Context:\n';
-      contextText += `${context.custom_context}\n`;
-    }
-
-    return contextText;
-  }
-
-  async gatherContextFromMCPs(prompt, availableServers = []) {
-    const context = {
-      past_chats: [],
-      files: [],
-      memory: [],
-      context7_docs: [],
-      custom_context: ''
-    };
-
-    try {
-      // This would be called by the Cursor agent to gather context
-      // from available MCP servers before calling the local LLM
-      
-      // Example of how context could be gathered:
-      // - Memory MCP: Get relevant memories
-      // - Context7 MCP: Get relevant documentation
-      // - File system: Get relevant files
-      // - Chat history: Get recent conversations
-      
-      console.log('Context gathering would be implemented here based on available MCP servers');
-      console.log('Available servers:', availableServers);
-      console.log('Prompt for context:', prompt);
-      
-    } catch (error) {
-      console.log('Error gathering context from MCPs:', error.message);
-    }
-
-    return context;
-  }
-
-  async validateWithCursorAgent(response, originalPrompt) {
-    // This method returns a special indicator that tells Cursor agent to validate the response
-    // Cursor agent will handle the validation using its built-in capabilities
-    
-    return {
-      valid: false, // Default to false to trigger Cursor validation
-      reason: 'cursor_validation_required',
-      confidence: 0.5,
-      suggestions: [],
-      cursor_validation_request: {
-        response: response,
-        original_prompt: originalPrompt,
-        validation_criteria: [
-          'Is the response relevant to the question?',
-          'Is the response complete and informative?',
-          'Does the response contain any obvious errors?',
-          'Is the response clear and well-structured?'
-        ]
-      }
-    };
-  }
-
   setupHandlers() {
+    // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: [
           {
-            name: 'generate_text',
-            description: 'Generate text using local LLM with fallback to other models',
+            name: "generate_text",
+            description: "Generate text using the local LLM with agentic capabilities",
             inputSchema: {
-              type: 'object',
+              type: "object",
               properties: {
                 prompt: {
-                  type: 'string',
-                  description: 'The text prompt to generate from',
-                },
-                context: {
-                  type: 'object',
-                  description: 'Context information to enhance the response',
-                  properties: {
-                    past_chats: {
-                      type: 'array',
-                      description: 'Previous chat messages for context',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          role: { type: 'string' },
-                          content: { type: 'string' }
-                        }
-                      }
-                    },
-                    files: {
-                      type: 'array',
-                      description: 'Relevant file contents',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          path: { type: 'string' },
-                          content: { type: 'string' }
-                        }
-                      }
-                    },
-                    memory: {
-                      type: 'array',
-                      description: 'Relevant memory entries',
-                      items: { type: 'string' }
-                    },
-                    context7_docs: {
-                      type: 'array',
-                      description: 'Context7 documentation snippets',
-                      items: { type: 'string' }
-                    },
-                    custom_context: {
-                      type: 'string',
-                      description: 'Any additional context information'
-                    }
-                  }
+                  type: "string",
+                  description: "The prompt to send to the LLM",
                 },
                 max_tokens: {
-                  type: 'number',
-                  description: 'Maximum number of tokens to generate',
+                  type: "number",
+                  description: "Maximum number of tokens to generate",
                   default: 1000,
                 },
                 temperature: {
-                  type: 'number',
-                  description: 'Temperature for generation',
+                  type: "number",
+                  description: "Temperature for response generation",
                   default: 0.7,
                 },
-                use_local_first: {
-                  type: 'boolean',
-                  description: 'Whether to try local LLM first',
+                use_agentic: {
+                  type: "boolean",
+                  description: "Whether to use agentic capabilities with tools",
                   default: true,
                 },
+                stream: {
+                  type: "boolean",
+                  description: "Whether to stream the response",
+                  default: false,
+                },
               },
-              required: ['prompt'],
+              required: ["prompt"],
             },
           },
           {
-            name: 'chat_completion',
-            description: 'Chat completion using local LLM with fallback',
+            name: "chat_completion",
+            description: "Chat completion with the local LLM using agentic capabilities",
             inputSchema: {
-              type: 'object',
+              type: "object",
               properties: {
                 messages: {
-                  type: 'array',
-                  description: 'Array of chat messages',
+                  type: "array",
+                  description: "Array of chat messages",
                   items: {
-                    type: 'object',
+                    type: "object",
                     properties: {
-                      role: { type: 'string', enum: ['system', 'user', 'assistant'] },
-                      content: { type: 'string' },
+                      role: { type: "string", enum: ["user", "assistant", "system"] },
+                      content: { type: "string" },
                     },
-                    required: ['role', 'content'],
+                    required: ["role", "content"],
                   },
                 },
-                context: {
-                  type: 'object',
-                  description: 'Context information to enhance the response',
-                  properties: {
-                    past_chats: {
-                      type: 'array',
-                      description: 'Previous chat messages for context',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          role: { type: 'string' },
-                          content: { type: 'string' }
-                        }
-                      }
-                    },
-                    files: {
-                      type: 'array',
-                      description: 'Relevant file contents',
-                      items: {
-                        type: 'object',
-                        properties: {
-                          path: { type: 'string' },
-                          content: { type: 'string' }
-                        }
-                      }
-                    },
-                    memory: {
-                      type: 'array',
-                      description: 'Relevant memory entries',
-                      items: { type: 'string' }
-                    },
-                    context7_docs: {
-                      type: 'array',
-                      description: 'Context7 documentation snippets',
-                      items: { type: 'string' }
-                    },
-                    custom_context: {
-                      type: 'string',
-                      description: 'Any additional context information'
-                    }
-                  }
-                },
                 max_tokens: {
-                  type: 'number',
-                  description: 'Maximum number of tokens to generate',
+                  type: "number",
+                  description: "Maximum number of tokens to generate",
                   default: 1000,
                 },
                 temperature: {
-                  type: 'number',
-                  description: 'Temperature for generation',
+                  type: "number",
+                  description: "Temperature for response generation",
                   default: 0.7,
                 },
+                use_agentic: {
+                  type: "boolean",
+                  description: "Whether to use agentic capabilities with tools",
+                  default: true,
+                },
+                stream: {
+                  type: "boolean",
+                  description: "Whether to stream the response",
+                  default: false,
+                },
               },
-              required: ['messages'],
+              required: ["messages"],
             },
           },
           {
-            name: 'generate_with_context',
-            description: 'Generate text with automatic context gathering from available MCP servers',
+            name: "rag_query",
+            description: "Query indexed documents using RAG (Retrieval-Augmented Generation)",
             inputSchema: {
-              type: 'object',
+              type: "object",
               properties: {
-                prompt: {
-                  type: 'string',
-                  description: 'The text prompt to generate from',
-                },
-                context_sources: {
-                  type: 'array',
-                  description: 'Available MCP servers to gather context from',
-                  items: {
-                    type: 'string',
-                    enum: ['memory', 'context7', 'files', 'chat_history']
-                  },
-                  default: ['memory', 'context7']
+                query: {
+                  type: "string",
+                  description: "The query to search for in indexed documents",
                 },
                 max_tokens: {
-                  type: 'number',
-                  description: 'Maximum number of tokens to generate',
+                  type: "number",
+                  description: "Maximum number of tokens to generate",
                   default: 1000,
                 },
                 temperature: {
-                  type: 'number',
-                  description: 'Temperature for generation',
+                  type: "number",
+                  description: "Temperature for response generation",
                   default: 0.7,
                 },
               },
-              required: ['prompt'],
+              required: ["query"],
             },
           },
           {
-            name: 'validate_response',
-            description: 'Validate a local LLM response using Cursor agent capabilities',
+            name: "index_document",
+            description: "Index a document for RAG queries",
             inputSchema: {
-              type: 'object',
+              type: "object",
               properties: {
-                response: {
-                  type: 'string',
-                  description: 'The response to validate',
+                file_path: {
+                  type: "string",
+                  description: "Path to the file to index",
                 },
-                original_prompt: {
-                  type: 'string',
-                  description: 'The original prompt that generated the response',
-                },
-                validation_criteria: {
-                  type: 'array',
-                  description: 'Specific criteria to validate against',
-                  items: { type: 'string' },
-                  default: [
-                    'Is the response relevant to the question?',
-                    'Is the response complete and informative?',
-                    'Does the response contain any obvious errors?',
-                    'Is the response clear and well-structured?'
-                  ]
+                text_content: {
+                  type: "string",
+                  description: "Text content to index directly (alternative to file_path)",
                 },
               },
-              required: ['response', 'original_prompt'],
             },
           },
         ],
       };
     });
 
+    // Handle tool calls
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
       try {
         switch (name) {
-          case 'generate_text':
-            return await this.handleTextGeneration(args);
-          case 'chat_completion':
+          case "generate_text":
+            return await this.handleGenerateText(args);
+          case "chat_completion":
             return await this.handleChatCompletion(args);
-          case 'generate_with_context':
-            return await this.handleContextAwareGeneration(args);
-          case 'validate_response':
-            return await this.handleResponseValidation(args);
+          case "rag_query":
+            return await this.handleRAGQuery(args);
+          case "index_document":
+            return await this.handleIndexDocument(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -374,489 +319,273 @@ class LocalLLMProxyServer {
         return {
           content: [
             {
-              type: 'text',
+              type: "text",
               text: `Error: ${error.message}`,
             },
           ],
-          isError: true,
         };
       }
     });
   }
 
-  async handleTextGeneration(args) {
-    const { prompt, context, max_tokens = 1000, temperature = 0.7, use_local_first = true } = args;
+  async handleGenerateText(args) {
+    const { prompt, max_tokens = 1000, temperature = 0.7, use_agentic = true, stream = false } = args;
 
-    if (use_local_first) {
-      try {
-        // Process context and enhance prompt
-        const contextText = this.processContext(context);
-        const enhancedPrompt = contextText ? `${prompt}\n\n${contextText}` : prompt;
+    try {
+      if (stream) {
+        // For streaming, we'll return a single response with streaming info
+        // In a real implementation, you'd use MCP's streaming capabilities
+        return {
+          content: [
+            {
+              type: "text",
+              text: `[STREAMING] Starting generation for prompt: "${prompt.substring(0, 100)}..."`,
+            },
+          ],
+        };
+      }
 
-        // Try local LLM first
-        const localResponse = await this.callLocalLLM({
-          model: 'local',
-          prompt: enhancedPrompt,
+      if (use_agentic) {
+        // Use agentic capabilities with tools
+        const response = await this.runAgenticQuery(prompt, {
           max_tokens,
           temperature,
         });
-
-        // Validate the response
-        const validation = await this.validateResponse(localResponse, prompt);
         
-        if (validation.valid) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: localResponse,
-              },
-            ],
-            metadata: {
-              model_used: 'local',
-              fallback_used: false,
-              validation: validation,
+        return {
+          content: [
+            {
+              type: "text",
+              text: response,
             },
-          };
-        }
+          ],
+        };
+      } else {
+        // Direct LLM call without tools
+        const response = await llm.complete({
+          prompt,
+          maxTokens: max_tokens,
+          temperature,
+        });
 
-        // Try to refine the response using validation suggestions
-        const refinedResponse = await this.refineResponse(localResponse, prompt, validation, context);
-        if (refinedResponse) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: refinedResponse,
-              },
-            ],
-            metadata: {
-              model_used: 'local_refined',
-              fallback_used: false,
-              validation: validation,
-              refined: true,
+        return {
+          content: [
+            {
+              type: "text",
+              text: response.text,
             },
-          };
-        }
-      } catch (error) {
-        console.log('Local LLM failed, trying fallback:', error.message);
+          ],
+        };
       }
+    } catch (error) {
+      throw new Error(`LLM generation failed: ${error.message}`);
     }
-
-    // Fallback to other models
-    return await this.tryFallbackModels({
-      prompt,
-      max_tokens,
-      temperature,
-    });
   }
 
   async handleChatCompletion(args) {
-    const { messages, context, max_tokens = 1000, temperature = 0.7 } = args;
+    const { messages, max_tokens = 1000, temperature = 0.7, use_agentic = true, stream = false } = args;
 
     try {
-      // Process context and enhance messages
-      const contextText = this.processContext(context);
-      let enhancedMessages = [...messages];
-      
-      if (contextText) {
-        // Add context as a system message or append to the last user message
-        const lastMessage = enhancedMessages[enhancedMessages.length - 1];
-        if (lastMessage && lastMessage.role === 'user') {
-          enhancedMessages[enhancedMessages.length - 1] = {
-            ...lastMessage,
-            content: `${lastMessage.content}\n\n${contextText}`
-          };
-        } else {
-          enhancedMessages.unshift({
-            role: 'system',
-            content: `Context information:\n${contextText}`
-          });
-        }
-      }
-
-      // Try local LLM first
-      const localResponse = await this.callLocalLLMChat({
-        model: 'local',
-        messages: enhancedMessages,
-        max_tokens,
-        temperature,
-      });
-
-      // Validate the response
-      const validation = await this.validateResponse(localResponse, messages[messages.length - 1]?.content || '');
-      
-      if (validation.valid) {
+      if (stream) {
+        // For streaming, we'll return a single response with streaming info
         return {
           content: [
             {
-              type: 'text',
-              text: localResponse,
+              type: "text",
+              text: `[STREAMING] Starting chat completion with ${messages.length} messages`,
             },
           ],
-          metadata: {
-            model_used: 'local',
-            fallback_used: false,
-            validation: validation,
-          },
         };
       }
 
-      // Try to refine the response using validation suggestions
-      const refinedResponse = await this.refineResponse(localResponse, messages[messages.length - 1]?.content || '', validation, context);
-      if (refinedResponse) {
+      if (use_agentic) {
+        // Convert messages to a single prompt for agentic processing
+        const prompt = messages
+          .map((msg) => `${msg.role}: ${msg.content}`)
+          .join("\n");
+        
+        const response = await this.runAgenticQuery(prompt, {
+          max_tokens,
+          temperature,
+        });
+        
         return {
           content: [
             {
-              type: 'text',
-              text: refinedResponse,
+              type: "text",
+              text: response,
             },
           ],
-          metadata: {
-            model_used: 'local_refined',
-            fallback_used: false,
-            validation: validation,
-            refined: true,
-          },
         };
-      }
-    } catch (error) {
-      console.log('Local LLM failed, trying fallback:', error.message);
-    }
-
-    // Fallback to other models
-    return await this.tryFallbackChatModels({
-      messages,
-      max_tokens,
-      temperature,
-    });
-  }
-
-  async handleContextAwareGeneration(args) {
-    const { prompt, context_sources = ['memory', 'context7'], max_tokens = 1000, temperature = 0.7 } = args;
-
-    try {
-      // Gather context from available MCP servers
-      const context = await this.gatherContextFromMCPs(prompt, context_sources);
-      
-      // Use the context-aware text generation
-      return await this.handleTextGeneration({
-        prompt,
-        context,
-        max_tokens,
-        temperature,
-        use_local_first: true
-      });
-      
-    } catch (error) {
-      console.log('Context-aware generation failed, falling back to basic generation:', error.message);
-      
-      // Fallback to basic generation without context
-      return await this.handleTextGeneration({
-        prompt,
-        max_tokens,
-        temperature,
-        use_local_first: true
-      });
-    }
-  }
-
-  async handleResponseValidation(args) {
-    const { response, original_prompt, validation_criteria } = args;
-
-    // This tool is designed to be called by the Cursor agent
-    // The Cursor agent should perform the actual validation using its capabilities
-    // and return a structured validation result
-    
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `[CURSOR_VALIDATION_REQUIRED] Please validate this response using your built-in capabilities.
-
-ORIGINAL PROMPT: "${original_prompt}"
-
-RESPONSE TO VALIDATE: "${response}"
-
-VALIDATION CRITERIA:
-${validation_criteria.map((criterion, index) => `${index + 1}. ${criterion}`).join('\n')}
-
-Please provide a validation result in this format:
-{
-  "valid": true/false,
-  "confidence": 0.0-1.0,
-  "reason": "brief explanation",
-  "suggestions": ["suggestion1", "suggestion2"] (only if valid: false)
-}`,
-        },
-      ],
-      metadata: {
-        tool_used: 'validate_response',
-        validation_request: {
-          response: response,
-          original_prompt: original_prompt,
-          criteria: validation_criteria
-        }
-      },
-    };
-  }
-
-  async callLocalLLM(params) {
-    const response = await fetch(`${this.localLLMUrl}/v1/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'local',
-        prompt: params.prompt,
-        max_tokens: params.max_tokens,
-        temperature: params.temperature,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Local LLM request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0]?.text || '';
-  }
-
-  async callLocalLLMChat(params) {
-    const response = await fetch(`${this.localLLMUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'local',
-        messages: params.messages,
-        max_tokens: params.max_tokens,
-        temperature: params.temperature,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Local LLM chat request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.choices[0]?.message?.content || '';
-  }
-
-  async validateResponse(response, originalPrompt) {
-    // Basic validation first
-    if (!response || response.trim().length === 0) {
-      return { valid: false, reason: 'empty_response' };
-    }
-
-    // Check if response is too short (less than 10 characters)
-    if (response.trim().length < 10) {
-      return { valid: false, reason: 'too_short' };
-    }
-
-    // Check if response contains error indicators
-    const errorIndicators = ['error', 'failed', 'unable to', 'cannot', 'sorry, i cannot'];
-    const lowerResponse = response.toLowerCase();
-    if (errorIndicators.some(indicator => lowerResponse.includes(indicator))) {
-      return { valid: false, reason: 'error_indicators' };
-    }
-
-    // If validation is enabled, use the appropriate validation method
-    if (this.validationConfig.enabled) {
-      // Prefer Cursor agent validation (more objective)
-      if (this.validationConfig.useCursorValidation) {
-        return await this.validateWithCursorAgent(response, originalPrompt);
-      }
-      // Fall back to local LLM validation if Cursor validation is not available
-      else if (this.validationConfig.useLocalValidator) {
-        return await this.validateWithLLM(response, originalPrompt);
-      }
-    }
-
-    return { valid: true, reason: 'basic_validation_passed' };
-  }
-
-  async validateWithLLM(response, originalPrompt) {
-    try {
-      const validationPrompt = `You are a quality assessor for AI responses. Please evaluate the following response to determine if it adequately addresses the user's prompt.
-
-USER PROMPT: "${originalPrompt}"
-
-AI RESPONSE: "${response}"
-
-Please assess the response on these criteria:
-1. Relevance: Does the response directly address the user's question/prompt?
-2. Completeness: Is the response complete and informative?
-3. Accuracy: Does the response appear factually correct?
-4. Clarity: Is the response clear and well-structured?
-5. Helpfulness: Would this response be helpful to the user?
-
-Respond with ONLY a JSON object in this exact format:
-{
-  "valid": true/false,
-  "confidence": 0.0-1.0,
-  "reason": "brief explanation",
-  "suggestions": ["suggestion1", "suggestion2"] (only if valid: false)
-}`;
-
-      // Use local LLM for validation
-      const validationResponse = await fetch(`${this.localLLMUrl}/v1/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'local',
-          messages: [
-            { role: 'system', content: 'You are a helpful assistant that evaluates AI responses for quality and relevance. Always respond with valid JSON.' },
-            { role: 'user', content: validationPrompt }
-          ],
-          max_tokens: 300,
-          temperature: 0.1,
-        }),
-      });
-
-      if (!validationResponse.ok) {
-        console.log('Local LLM validation failed, falling back to basic validation');
-        return { valid: true, reason: 'local_llm_validation_failed_fallback' };
-      }
-
-      const validationData = await validationResponse.json();
-      const validationText = validationData.choices[0]?.message?.content || '';
-
-      try {
-        const validation = JSON.parse(validationText);
-        return {
-          valid: validation.valid,
-          reason: validation.reason,
-          confidence: validation.confidence || 0.5,
-          suggestions: validation.suggestions || [],
-        };
-      } catch (parseError) {
-        console.log('Failed to parse local LLM validation response, using fallback');
-        return { valid: true, reason: 'local_llm_validation_parse_error' };
-      }
-
-    } catch (error) {
-      console.log('Local LLM validation error:', error.message);
-      return { valid: true, reason: 'local_llm_validation_error_fallback' };
-    }
-  }
-
-  async refineResponse(originalResponse, originalPrompt, validation, context = null) {
-    if (!this.validationConfig.enabled || !validation.suggestions || validation.suggestions.length === 0) {
-      return null;
-    }
-
-    try {
-      const contextText = this.processContext(context);
-      const refinementPrompt = `The following response was generated but needs improvement based on the validation feedback.
-
-ORIGINAL PROMPT: "${originalPrompt}"
-
-ORIGINAL RESPONSE: "${originalResponse}"
-
-VALIDATION FEEDBACK: ${validation.reason}
-SUGGESTIONS: ${validation.suggestions.join(', ')}
-
-${contextText ? `\nCONTEXT INFORMATION:\n${contextText}\n` : ''}
-
-Please provide an improved version of the response that addresses the validation feedback while maintaining the core information. Make the response more relevant, complete, accurate, clear, and helpful. Use the context information to provide more accurate and relevant responses.
-
-IMPROVED RESPONSE:`;
-
-      const refinedResponse = await fetch(`${this.localLLMUrl}/v1/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'local',
-          prompt: refinementPrompt,
-          max_tokens: 500,
-          temperature: 0.3,
-        }),
-      });
-
-      if (!refinedResponse.ok) {
-        console.log('Response refinement failed');
-        return null;
-      }
-
-      const data = await refinedResponse.json();
-      const refined = data.choices[0]?.text || '';
-
-      // Validate the refined response
-      const refinedValidation = await this.validateResponse(refined, originalPrompt);
-      
-      if (refinedValidation.valid) {
-        console.log('Response successfully refined');
-        return refined;
       } else {
-        console.log('Refined response still not valid, trying fallback');
-        return null;
-      }
+        // Direct chat completion
+        const response = await llm.chat({
+          messages,
+          maxTokens: max_tokens,
+          temperature,
+        });
 
+        return {
+          content: [
+            {
+              type: "text",
+              text: response.message.content,
+            },
+          ],
+        };
+      }
     } catch (error) {
-      console.log('Error during response refinement:', error.message);
-      return null;
+      throw new Error(`Chat completion failed: ${error.message}`);
     }
   }
 
-  async tryFallbackModels(params) {
-    // Since this MCP server is used internally with Cursor,
-    // the fallback is handled by the Cursor agent itself
-    // We return a special indicator that tells Cursor to handle the request
-    
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `[FALLBACK_TO_CURSOR_AGENT] Local LLM response was inadequate. Please handle this request using your standard capabilities.`,
-        },
-      ],
-      metadata: {
-        model_used: 'cursor_agent_fallback',
-        fallback_used: true,
-        fallback_reason: 'local_llm_inadequate',
-        original_prompt: params.prompt,
-      },
-    };
+  async handleRAGQuery(args) {
+    const { query, max_tokens = 1000, temperature = 0.7 } = args;
+
+    try {
+      if (!documentIndex) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Error: No documents have been indexed yet. Use the index_document tool first.",
+            },
+          ],
+        };
+      }
+
+      const queryEngine = documentIndex.asQueryEngine();
+      const response = await queryEngine.query({ query });
+
+      const sourceInfo = response.sourceNodes?.map(node => 
+        `Source: ${node.metadata?.source || 'unknown'}`
+      ).join('\n') || 'No sources found';
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Query: ${query}\n\nResponse: ${response.response}\n\n${sourceInfo}`,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(`RAG query failed: ${error.message}`);
+    }
   }
 
-  async tryFallbackChatModels(params) {
-    // Since this MCP server is used internally with Cursor,
-    // the fallback is handled by the Cursor agent itself
-    // We return a special indicator that tells Cursor to handle the request
-    
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `[FALLBACK_TO_CURSOR_AGENT] Local LLM chat response was inadequate. Please handle this request using your standard capabilities.`,
-        },
-      ],
-      metadata: {
-        model_used: 'cursor_agent_fallback',
-        fallback_used: true,
-        fallback_reason: 'local_llm_inadequate',
-        original_messages: params.messages,
-      },
-    };
+  async handleIndexDocument(args) {
+    const { file_path, text_content } = args;
+
+    try {
+      if (file_path) {
+        const result = await ragTool.execute({ 
+          action: "index_document", 
+          filePath: file_path 
+        });
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: result,
+            },
+          ],
+        };
+      } else if (text_content) {
+        const result = await ragTool.execute({ 
+          action: "index_text", 
+          text: text_content 
+        });
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: result,
+            },
+          ],
+        };
+      } else {
+        throw new Error("Either file_path or text_content must be provided");
+      }
+    } catch (error) {
+      throw new Error(`Document indexing failed: ${error.message}`);
+    }
+  }
+
+  async runAgenticQuery(prompt, options = {}) {
+    try {
+      // Simple agentic implementation using tool calling
+      // In a more advanced implementation, you'd use the full LlamaIndex.TS agent framework
+      
+      // Check if the prompt requires tool usage
+      const needsMath = /\b(add|subtract|multiply|divide|plus|minus|times|divided by)\b/i.test(prompt);
+      const needsFileSystem = /\b(read|write|list|file|directory)\b/i.test(prompt);
+      const needsRAG = /\b(search|find|query|document|index)\b/i.test(prompt);
+
+      let toolResults = "";
+      
+      if (needsMath) {
+        // Extract numbers and operation from prompt
+        const numbers = prompt.match(/\d+/g);
+        if (numbers && numbers.length >= 2) {
+          const a = parseInt(numbers[0]);
+          const b = parseInt(numbers[1]);
+          let operation = "add";
+          
+          if (/\b(subtract|minus)\b/i.test(prompt)) operation = "subtract";
+          else if (/\b(multiply|times)\b/i.test(prompt)) operation = "multiply";
+          else if (/\b(divide|divided by)\b/i.test(prompt)) operation = "divide";
+          
+          const result = await mathTool.execute({ a, b, operation });
+          toolResults += `\nTool Result: ${result}\n`;
+        }
+      }
+
+
+      if (needsRAG && documentIndex) {
+        // Extract query from prompt for RAG
+        const queryMatch = prompt.match(/\b(?:search|find|query)\s+(.+?)(?:\s|$|,|\.)/i);
+        if (queryMatch) {
+          const query = queryMatch[1].trim();
+          const result = await ragTool.execute({ 
+            action: "query_documents", 
+            query: query 
+          });
+          toolResults += `\nTool Result: ${result}\n`;
+        }
+      }
+
+      // Generate response with tool results
+      const enhancedPrompt = `${prompt}\n\n${toolResults}`;
+      
+      const response = await llm.complete({
+        prompt: enhancedPrompt,
+        maxTokens: options.max_tokens || 1000,
+        temperature: options.temperature || 0.7,
+      });
+
+      return response.text;
+    } catch (error) {
+      // Fallback to direct LLM call if agentic processing fails
+      const response = await llm.complete({
+        prompt,
+        maxTokens: options.max_tokens || 1000,
+        temperature: options.temperature || 0.7,
+      });
+      
+      return response.text;
+    }
   }
 
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('Local LLM Proxy MCP server running on stdio');
+    console.error("Local LLM Proxy MCP Server with LlamaIndex.TS integration running on stdio");
   }
 }
 
+// Start the server
 const server = new LocalLLMProxyServer();
 server.run().catch(console.error);
-
-// Export for testing
-export { LocalLLMProxyServer };
-

@@ -87,3 +87,4 @@ const result = await mcp_local-llm-proxy_generate_text({
   max_tokens: 1000
 });
 ```
+

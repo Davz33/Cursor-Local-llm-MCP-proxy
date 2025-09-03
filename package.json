@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.4.0",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "llamaindex": "^0.1.0",
+    "@llamaindex/openai": "^0.1.0",
+    "@llamaindex/huggingface": "^0.1.0",
+    "zod": "^3.22.0"
   },
   "keywords": [
     "mcp",
