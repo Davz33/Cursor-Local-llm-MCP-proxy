@@ -6,6 +6,11 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { AgenticService } from "../agentic/agentic-service.js";
 import { RAGService } from "../rag/rag-service.js";
+import { SonarService } from "../services/sonar-service.js";
+import { config } from 'dotenv';
+
+// Load environment variables from .env file
+config();
 
 export interface GenerateTextArgs {
   prompt: string;
@@ -39,6 +44,13 @@ export interface IndexDocumentArgs {
   text_content?: string;
 }
 
+export interface SonarQueryArgs {
+  query: string;
+  max_tokens?: number;
+  temperature?: number;
+  model?: string;
+}
+
 /**
  * Local LLM Proxy MCP Server with LlamaIndex.TS integration
  */
@@ -46,6 +58,7 @@ export class LocalLLMProxyServer {
   private server: Server;
   private agenticService: AgenticService;
   private ragService: RAGService;
+  private sonarService: SonarService;
 
   constructor() {
     this.server = new Server(
@@ -57,6 +70,15 @@ export class LocalLLMProxyServer {
 
     this.agenticService = new AgenticService();
     this.ragService = this.agenticService.getRAGService();
+    
+    // Initialize Sonar service (will throw error if API key is missing)
+    try {
+      this.sonarService = new SonarService();
+    } catch (error) {
+      console.error("Sonar service initialization failed:", (error as Error).message);
+      // Create a placeholder service that will show error when used
+      this.sonarService = null as any;
+    }
     
     this.setupHandlers();
   }
@@ -300,6 +322,36 @@ export class LocalLLMProxyServer {
               required: ["prompt"]
             },
           },
+          {
+            name: "sonar_query",
+            description: "Query Perplexity's Sonar API for real-time information with citations",
+            inputSchema: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "The query to search for real-time information"
+                },
+                max_tokens: {
+                  type: "number",
+                  description: "Maximum number of tokens to generate",
+                  default: 1000
+                },
+                temperature: {
+                  type: "number",
+                  description: "Temperature for response generation",
+                  default: 0.7
+                },
+                model: {
+                  type: "string",
+                  description: "Sonar model to use",
+                  enum: ["sonar-pro", "sonar-online", "sonar-medium-online", "sonar-small-online"],
+                  default: "sonar-pro"
+                }
+              },
+              required: ["query"]
+            },
+          },
         ],
       };
     });
@@ -342,6 +394,8 @@ export class LocalLLMProxyServer {
             return await this.handleCallOrchestratedTool(args as { server_name: string; tool_name: string; arguments?: any });
           case "delegate_to_local_llm":
             return await this.handleDelegateToLocalLLM(args as { prompt: string; context?: any; max_tokens?: number; temperature?: number; enable_validation?: boolean });
+          case "sonar_query":
+            return await this.handleSonarQuery(args as unknown as SonarQueryArgs);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -803,5 +857,61 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGHUP', () => shutdown('SIGHUP'));
+  }
+
+  /**
+   * Handle Sonar API queries
+   */
+  private async handleSonarQuery(args: SonarQueryArgs) {
+    try {
+      if (!this.sonarService) {
+        throw new Error("Sonar service is not available. Please set PERPLEXITY_API_KEY environment variable.");
+      }
+
+      console.error(`MCP Server: Querying Sonar API with: ${args.query}`);
+      
+      const result = await this.sonarService.searchWithCitations(args.query, {
+        max_tokens: args.max_tokens || 1000,
+        temperature: args.temperature || 0.7
+      });
+
+      console.error(`MCP Server: Sonar API response received with ${result.sources.length} sources`);
+
+      // Format the response with citations
+      let responseText = result.answer;
+      
+      if (result.sources.length > 0) {
+        responseText += "\n\n**Sources:**\n";
+        result.sources.forEach((source, index) => {
+          responseText += `${index + 1}. [${source.title}](${source.url})\n`;
+          if (source.snippet) {
+            responseText += `   ${source.snippet}\n`;
+          }
+        });
+      }
+
+      responseText += `\n\n--- Sonar API Info ---\n`;
+      responseText += `Cost: $${result.cost.toFixed(4)}\n`;
+      responseText += `Sources: ${result.sources.length}\n`;
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error(`MCP Server: Error in Sonar query:`, (error as Error).message);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error querying Sonar API: ${(error as Error).message}`,
+          },
+        ],
+      };
+    }
   }
 }
