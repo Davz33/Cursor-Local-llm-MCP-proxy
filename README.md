@@ -2,11 +2,14 @@
 
 A powerful TypeScript-based MCP (Model Context Protocol) server that enhances local LLM capabilities with agentic behavior, RAG (Retrieval-Augmented Generation), and tool integration using LlamaIndex.TS.
 
+This server is compatible with Cursor and similar IDEs supporting MCP client definitions similar to Cursor's `mcp.json`. The server's goal is to take load (and budgeting) off the more powerful cloud-based LLMs in Cursor (and similar) and use them for either validation purposes against the locally prompted LLMs, and/or fallback system.  
+
+The project's goal and current minimal functionalities also aims at equipping your LM-studio local agent with agentic tools like RAG, memory graphs, math calculations and more, such that the locally-provided answer's accuracy is futher increased, decreasing the likelihood of interaction with the more expensive cloud-native models.
+
 ## 🚀 Features
 
 ### 🧠 Agentic Capabilities
 - **Math Tool**: Performs basic mathematical operations (add, subtract, multiply, divide)
-- **Weather Tool**: Provides mock weather information for cities
 - **File System Tool**: Read, write, and list files and directories
 - **RAG System**: Document indexing and querying with natural language
 
@@ -38,7 +41,7 @@ A powerful TypeScript-based MCP (Model Context Protocol) server that enhances lo
 ### Setup
 1. **Clone the repository:**
 ```bash
-git clone <repository-url>
+git clone https://github.com/Davz33/Cursor-Local-llm-MCP-proxy
 cd local-llm-proxy
 ```
 
@@ -135,7 +138,7 @@ The server can be configured using environment variables:
   "name": "chat_completion",
   "arguments": {
     "messages": [
-      {"role": "user", "content": "What's the weather in San Francisco?"}
+      {"role": "user", "content": "Can you help me calculate the area of a circle with radius 5?"}
     ],
     "use_agentic": true,
     "max_tokens": 300
@@ -173,6 +176,16 @@ The server can be configured using environment variables:
   }
 }
 ```
+
+```json
+{
+  "name": "raq_query",
+  "arguments": {
+    "query": "Can you search for information about TypeScript in the indexed documents?",
+    "max_tokens": 300
+  }
+}
+
 
 ## 🧪 Testing
 
@@ -290,7 +303,7 @@ DEBUG=* npm start
 
 ## 📄 License
 
-MIT License - see LICENSE file for details
+GPL 3.0 License - see COPYING file for details
 
 ## 🤝 Contributing
 
@@ -307,7 +320,7 @@ For support and questions:
 
 1. **Clone and Setup:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/Davz33/Cursor-Local-llm-MCP-proxy
    cd local-llm-proxy
    npm install
    npm run build
