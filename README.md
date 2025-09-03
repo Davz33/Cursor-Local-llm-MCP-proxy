@@ -38,18 +38,25 @@ npm install
 
 ### 1. Start LM Studio
 1. Download and install [LM Studio](https://lmstudio.ai/)
-2. Load your Quen3 model (or preferred model)
+2. Load your preferred model (e.g., Qwen3, Llama, etc.)
 3. Start the server on `http://localhost:1234/v1`
 
 ### 2. Configure Environment (Optional)
 ```bash
 export LM_STUDIO_BASE_URL="http://localhost:1234/v1"
-export LM_STUDIO_MODEL="qwen3"
+export LM_STUDIO_MODEL="qwen3-coder-30b-a3b-instruct"
 ```
 
 ### 3. Start the MCP Server
+
+**Production:**
 ```bash
 npm start
+```
+
+**Development (with hot reload):**
+```bash
+npm run dev
 ```
 
 ## 🔧 Configuration
@@ -111,19 +118,43 @@ The server can be configured using environment variables:
 
 ## 🧪 Testing
 
-Run the test suite to verify functionality:
+The server includes comprehensive testing capabilities:
 
 ```bash
-node test-enhanced-server.js
+# Test basic functionality
+npm start
+
+# Test with validation enabled
+npm run start:with-validation
+
+# Development mode with hot reload
+npm run dev
 ```
 
 ## 🏗 Architecture
 
+### Modular Structure
+```
+src/
+├── config/
+│   └── llm-config.js          # LLM and embedding model configuration
+├── rag/
+│   └── rag-service.js         # RAG functionality and document indexing
+├── agentic/
+│   └── agentic-service.js     # Agentic LLM interactions with tools
+├── tools/
+│   └── agentic-tools.js       # Tool definitions (math, filesystem, RAG)
+└── mcp/
+    └── mcp-server.js          # MCP server implementation
+```
+
 ### Core Components
 - **MCP Server**: Handles Model Context Protocol communication
-- **LlamaIndex.TS Integration**: Provides RAG and document processing
-- **LM Studio Adapter**: Connects to local LLM via OpenAI-compatible API
-- **Tool System**: Modular tool architecture for agentic behavior
+- **LlamaIndex.TS Integration**: Modern v0.11.28 with Settings API
+- **LM Studio Adapter**: OpenAI-compatible API integration
+- **RAG Service**: Document indexing and querying with HuggingFace embeddings
+- **Agentic Service**: Tool-integrated LLM interactions
+- **Modular Tools**: Extensible tool architecture
 
 ### Tool Architecture
 ```javascript

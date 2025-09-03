@@ -1,28 +1,36 @@
 {
   "name": "local-llm-proxy-mcp",
   "version": "1.0.0",
-  "description": "MCP server for local LLM with speculative decoding and fallback",
+  "description": "Enhanced MCP server for local LLM with RAG, agentic capabilities, and tool integration using LlamaIndex.TS",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "start:with-validation": "LLM_VALIDATION_ENABLED=true USE_LOCAL_VALIDATOR=true node index.js"
+    "start:with-validation": "LLM_VALIDATION_ENABLED=true USE_LOCAL_VALIDATOR=true node index.js",
+    "dev": "nodemon index.js",
+    "dev:with-validation": "LLM_VALIDATION_ENABLED=true USE_LOCAL_VALIDATOR=true nodemon index.js"
   },
   "dependencies": {
+    "@llamaindex/huggingface": "^0.1.28",
+    "@llamaindex/openai": "^0.4.18",
     "@modelcontextprotocol/sdk": "^0.4.0",
+    "llamaindex": "^0.11.28",
     "node-fetch": "^3.3.2",
-    "llamaindex": "^0.1.0",
-    "@llamaindex/openai": "^0.1.0",
-    "@llamaindex/huggingface": "^0.1.0",
     "zod": "^3.22.0"
   },
   "keywords": [
     "mcp",
     "llm",
     "proxy",
-    "speculative-decoding"
+    "rag",
+    "agentic",
+    "llamaindex",
+    "lm-studio",
+    "local-llm"
   ],
   "author": "Davide Vitiello",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
 }
-
