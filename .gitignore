@@ -35,6 +35,12 @@ jspm_packages/
 # TypeScript cache
 *.tsbuildinfo
 
+# TypeScript generated files in root
+index.js
+index.d.ts
+index.d.ts.map
+index.js.map
+
 # Optional npm cache directory
 .npm
 

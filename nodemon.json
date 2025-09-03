@@ -2,6 +2,6 @@
   "watch": ["src/", "index.ts"],
   "ignore": ["node_modules/", "*.test.ts", "*.spec.ts", "dist/"],
   "ext": "ts,js,json",
-  "exec": "ts-node --esm index.ts",
+  "exec": "tsx index.ts",
   "delay": 1000
 }
