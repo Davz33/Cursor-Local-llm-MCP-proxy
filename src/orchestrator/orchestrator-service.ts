@@ -231,21 +231,39 @@ export class OrchestratorService {
   }
 
   /**
-   * Read orchestration rules from file
+   * Read orchestration rules from files
    */
   private readOrchestrationRules(): string {
+    let combinedRules = "";
+    
     try {
-      // Use environment variable for rules path, fallback to default location
-      const rulesPath = process.env.MCP_ORCHESTRATION_RULES_PATH || 
-                       join(process.env.HOME || process.env.USERPROFILE || "", "local-llm-proxy", "mcp-orchestration-rules.txt");
-      
-      console.log(`Orchestrator: Reading rules from: ${rulesPath}`);
-      return readFileSync(rulesPath, "utf-8");
+      // Read general rules from the repository
+      const generalRulesPath = join(__dirname, "general-orchestration-rules.txt");
+      console.log(`Orchestrator: Reading general rules from: ${generalRulesPath}`);
+      const generalRules = readFileSync(generalRulesPath, "utf-8");
+      combinedRules += generalRules + "\n\n";
     } catch (error) {
-      console.error("Orchestrator: Failed to read orchestration rules:", (error as Error).message);
-      console.error("Orchestrator: Using default rules");
+      console.error("Orchestrator: Failed to read general orchestration rules:", (error as Error).message);
+    }
+    
+    try {
+      // Read personal rules from user's home directory
+      const personalRulesPath = process.env.MCP_PERSONAL_RULES_PATH || 
+                               join(process.env.HOME || process.env.USERPROFILE || "", "local-llm-proxy", "personal-orchestration-rules.txt");
+      console.log(`Orchestrator: Reading personal rules from: ${personalRulesPath}`);
+      const personalRules = readFileSync(personalRulesPath, "utf-8");
+      combinedRules += personalRules;
+    } catch (error) {
+      console.error("Orchestrator: Failed to read personal orchestration rules:", (error as Error).message);
+      console.error("Orchestrator: Continuing with general rules only");
+    }
+    
+    if (!combinedRules.trim()) {
+      console.error("Orchestrator: No rules found, using default rules");
       return "# Default orchestration rules\n- Use available tools based on prompt analysis";
     }
+    
+    return combinedRules;
   }
 
   /**

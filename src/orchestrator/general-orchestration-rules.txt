@@ -1,0 +1,121 @@
+# General MCP Orchestration Rules
+# Core rules for MCP server functionality and tool orchestration
+
+## Core Orchestration Principles
+- Always use local-llm-proxy with context of sequential thinking, memory and graph MCP servers
+- When using local-llm-proxy MCP server, always gather context from available MCP servers before calling tools
+- Use real tool calls, not simulation
+- Handle errors gracefully and provide fallbacks
+
+## Memory Operations
+- For creating entities: use memory.create_entities
+- For creating relations: use memory.create_relations
+- For listing projects: use memory-bank-mcp.list_projects
+- For reading memory: use memory-bank-mcp.memory_bank_read
+- For writing memory: use memory-bank-mcp.memory_bank_write
+- Always get key project context via the memory MCP tool
+- Save all chain of thoughts from sequential thinking in memory as analogy-like thinking patterns
+- Use past chats for memories and save key information about errors and fixes
+- Structure memories as graph when applicable
+
+## Thinking Operations  
+- For complex analysis: use sequential-thinking.sequentialthinking
+- For step-by-step reasoning: use sequential-thinking.sequentialthinking
+- For breaking down problems: use sequential-thinking.sequentialthinking
+- Always do critical thinking with memory context
+- Use sequential thinking when applicable for complex tasks
+
+## Documentation Operations
+- For library docs: use context7.resolve-library-id then context7.get-library-docs
+- For web content: use website-downloader.download_website
+
+## RAG Operations
+- For saving content: use local-llm-proxy.index_document
+- For querying: use local-llm-proxy.rag_query
+- For saving storage: use local-llm-proxy.save_rag_storage
+
+## Image Operations
+- For generating images: use image-gen.generate_image
+
+## OCR Operations
+- For text extraction: use ocr.extract_text
+
+## Git Operations
+- For git operations: use git.* tools
+
+## GitHub Operations
+- For GitHub operations: use github.* tools
+
+## Coding Operations
+- For code suggestions: use coding-assistant.get_suggestions
+- For documentation: use coding-assistant.add_documentation
+- Check what's already implemented regarding what you're about to implement before proceeding
+- When implementing new features, don't override or change previously implemented features without first testing that the change doesn't introduce new bugs
+- After testing different approaches and reaching a solution, clean up any unnecessary files used during the process
+
+## Development Operations
+- Reread all available context before answering
+- If an approach failed two times, try a different approach
+- If a model call failed 2 times, try a different model using the same context
+
+## Error Handling and Learning
+- You have access to a memory bank via MCP server to store and retrieve information about recurring errors
+- When you encounter an error, save a detailed log including message, context, and time
+- Before attempting a solution, check memory bank for similar error entries
+- If previous solution worked, apply it; otherwise try new approaches and record results
+- If error causes agent to get stuck, write error report into memory for future reference
+
+## Tool Selection Rules
+- Always use the most specific tool for the task
+- If multiple tools could work, choose the most appropriate one
+- Prioritize tools that provide the most relevant context for the specific task
+- Consider tool reliability and error handling capabilities when selecting
+- Handle errors gracefully and provide fallbacks
+- Use real tool calls, not simulation
+
+## Fallback Communication with Cursor
+- When encountering tool execution errors, report specific error details for targeted fallback
+- Use clear error reporting format: "❌ ORCHESTRATOR ERROR: [specific tool] - [error details]"
+- For validation failures, report: "⚠️ VALIDATION WARNING: [specific issue] - [accuracy/quality concern]"
+- When requesting fallback, specify exactly what step failed and what assistance is needed
+- After receiving fallback assistance, acknowledge and continue with remaining orchestration
+- Never request complete takeover - only specific step assistance
+- Maintain context and learning from fallback interventions
+- Report successful resolution of fallback issues for future reference
+
+## Error Reporting Standards
+- Tool connection errors: "Connection failed for [tool_name]: [error_message]"
+- Tool execution errors: "Execution failed for [tool_name]: [error_message]"
+- Validation failures: "Response quality below threshold: [specific_issues]"
+- Timeout errors: "Timeout occurred for [tool_name] after [duration]"
+- Always include context about what was being attempted when error occurred
+
+## Real-time Information Operations
+- For current events and real-time information: use local-llm-proxy.sonar_query
+- For news and recent developments: use local-llm-proxy.sonar_query
+- For up-to-date technical information: use local-llm-proxy.sonar_query
+- For market data and financial information: use local-llm-proxy.sonar_query
+- For weather and location-based information: use local-llm-proxy.sonar_query
+- Always prefer Sonar for information that changes frequently or requires current data
+- Use Sonar when local knowledge or RAG storage might be outdated
+
+## Environment Configuration
+- For Sonar API access: Ensure PERPLEXITY_API_KEY is set in .env file
+- Alternative API key names: SONAR_API_KEY or PERPLEXITY_SONAR_API_KEY
+- Get API key from: https://www.perplexity.ai/settings/api
+- Create .env file in project root with: PERPLEXITY_API_KEY=your_key_here
+
+## Web Search Priority Rules
+- For ANY query containing: recent, latest, current, news, today, now, developments, events, weather, market, trends, statistics, search, find, look up, or location names
+- IMMEDIATELY use local-llm-proxy.sonar_query as the PRIMARY tool
+- Do NOT fallback to Cursor for web search queries when Sonar is available
+- Web search queries should be handled entirely by the orchestrator using Sonar
+- Only use sequential thinking for web search if the query also contains analysis, complex, or reasoning keywords
+
+## Web Search Patterns Configuration
+- Web search patterns are now managed in a separate, tracked file: src/orchestrator/web-search-patterns.ts
+- Patterns are general and do not include specific names, locations, or entities
+- Each pattern has a priority level (higher = more important)
+- Patterns are automatically sorted by priority for matching
+- To modify web search detection, update the patterns in the dedicated file
+- Current patterns include: time-based (recent, latest, current, today, now), news/events, data/information, search/lookup, and general location terms
