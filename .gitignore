@@ -116,3 +116,6 @@ test-*.js
 *.test.js
 *.spec.js
 
+# RAG storage (contains indexed documents)
+rag-storage/
+

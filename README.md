@@ -130,6 +130,13 @@ graph TB
 - **Real-time validation** checking for errors, inability expressions, and response completeness
 - **Configurable thresholds** for confidence scoring and fallback triggers
 
+### 📋 Configuration & Rules
+- **Cursor Delegation Rules**: See [CURSOR_DELEGATION_RULES.md](./CURSOR_DELEGATION_RULES.md) for IDE integration guidelines
+- **Delegation Implementation Guide**: See [DELEGATION_IMPLEMENTATION_GUIDE.md](./DELEGATION_IMPLEMENTATION_GUIDE.md) for complete system setup
+- **MCP Orchestrator Rules**: See [mcp-orchestrator-rules.example.json](./mcp-orchestrator-rules.example.json) for server-side rule configuration
+- **Customizable rule engine** for tool usage policies and validation behavior
+- **Environment-based configuration** with sensible defaults
+
 ## 📦 Installation
 
 ### Prerequisites
