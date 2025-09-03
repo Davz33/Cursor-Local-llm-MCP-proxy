@@ -6,6 +6,93 @@ This server is compatible with Cursor and similar IDEs supporting MCP client def
 
 The project's goal and current minimal functionalities also aims at equipping your LM-studio local agent with agentic tools like RAG, memory graphs, math calculations and more, such that the locally-provided answer's accuracy is futher increased, decreasing the likelihood of interaction with the more expensive cloud-native models.
 
+## 🔄 Architecture & Workflow
+
+```mermaid
+graph TB
+    %% User and IDE Layer
+    User[👤 User] --> Cursor[🖥️ Cursor IDE]
+    Cursor --> MCPClient[MCP Client]
+    
+    %% MCP Communication Layer
+    MCPClient --> MCPServer[🔧 Local LLM Proxy MCP Server]
+    MCPServer --> AgenticService[🧠 Agentic Service]
+    MCPServer --> RAGService[📚 RAG Service]
+    
+    %% Agentic Capabilities
+    AgenticService --> MathTool[➕ Math Tool]
+    AgenticService --> FileSystemTool[📁 File System Tool]
+    AgenticService --> RAGTool[🔍 RAG Tool]
+    
+    %% RAG Persistence Layer
+    RAGService --> VectorIndex[🗃️ Vector Store Index]
+    RAGService --> DocumentStorage[💾 Document Storage]
+    DocumentStorage --> DiskStorage[(💿 Persistent Storage)]
+    
+    %% LM Studio Integration
+    AgenticService --> LLMConfig[⚙️ LLM Configuration]
+    RAGService --> LLMConfig
+    LLMConfig --> LMStudio[🤖 LM Studio Server]
+    LMStudio --> LocalModel[🧠 Local LLM Model]
+    
+    %% Embedding Integration
+    RAGService --> EmbeddingModel[🔤 HuggingFace Embeddings]
+    
+    %% Data Flow
+    User -->|"1. Query/Request"| Cursor
+    Cursor -->|"2. MCP Protocol"| MCPClient
+    MCPClient -->|"3. Tool Call"| MCPServer
+    
+    MCPServer -->|"4a. Agentic Processing"| AgenticService
+    MCPServer -->|"4b. RAG Query"| RAGService
+    
+    AgenticService -->|"5a. Tool Selection"| MathTool
+    AgenticService -->|"5b. Tool Selection"| FileSystemTool
+    AgenticService -->|"5c. Tool Selection"| RAGTool
+    
+    RAGService -->|"6a. Document Indexing"| VectorIndex
+    RAGService -->|"6b. Auto-Save"| DocumentStorage
+    DocumentStorage -->|"7. Persist to Disk"| DiskStorage
+    
+    VectorIndex -->|"8. Query Processing"| EmbeddingModel
+    EmbeddingModel -->|"9. Vector Search"| VectorIndex
+    
+    AgenticService -->|"10. LLM Generation"| LLMConfig
+    RAGService -->|"11. LLM Generation"| LLMConfig
+    LLMConfig -->|"12. API Call"| LMStudio
+    LMStudio -->|"13. Model Inference"| LocalModel
+    
+    LocalModel -->|"14. Response"| LMStudio
+    LMStudio -->|"15. API Response"| LLMConfig
+    LLMConfig -->|"16. Processed Response"| AgenticService
+    LLMConfig -->|"17. Processed Response"| RAGService
+    
+    AgenticService -->|"18. Final Response"| MCPServer
+    RAGService -->|"19. Final Response"| MCPServer
+    MCPServer -->|"20. MCP Response"| MCPClient
+    MCPClient -->|"21. Display Result"| Cursor
+    Cursor -->|"22. Show to User"| User
+    
+    %% Persistence Flow
+    DiskStorage -.->|"23. Load on Startup"| DocumentStorage
+    DocumentStorage -.->|"24. Recreate Index"| VectorIndex
+    
+    %% Styling
+    classDef userLayer fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef mcpLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef serviceLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef toolLayer fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef storageLayer fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef llmLayer fill:#e0f2f1,stroke:#004d40,stroke-width:2px
+    
+    class User,Cursor userLayer
+    class MCPClient,MCPServer mcpLayer
+    class AgenticService,RAGService serviceLayer
+    class MathTool,FileSystemTool,RAGTool toolLayer
+    class VectorIndex,DocumentStorage,DiskStorage storageLayer
+    class LLMConfig,LMStudio,LocalModel,EmbeddingModel llmLayer
+```
+
 ## 🚀 Features
 
 ### 🧠 Agentic Capabilities
@@ -17,13 +104,18 @@ The project's goal and current minimal functionalities also aims at equipping yo
 - Index documents from files or direct text input
 - Query indexed documents with natural language
 - Source attribution for responses
-- Persistent document storage during session
+- Persistent document storage across Cursor restarts
+- Automatic document loading on server startup
+- File-based persistence with configurable storage path
 
 ### 🛠 Available MCP Tools
 1. `generate_text_v2` - Generate text with agentic capabilities
 2. `chat_completion` - Chat completion with tool integration
 3. `rag_query` - Query indexed documents using RAG
 4. `index_document` - Index documents for RAG queries
+5. `save_rag_storage` - Manually save RAG documents to disk
+6. `clear_rag_storage` - Clear all persistent RAG storage
+7. `rag_storage_status` - Get RAG storage status and persistence info
 
 ### 🌐 LM Studio Integration
 - OpenAI-compatible API integration
@@ -177,13 +269,25 @@ The server can be configured using environment variables:
 }
 ```
 
+### RAG Storage Management
 ```json
 {
-  "name": "raq_query",
-  "arguments": {
-    "query": "Can you search for information about TypeScript in the indexed documents?",
-    "max_tokens": 300
-  }
+  "name": "save_rag_storage",
+  "arguments": {}
+}
+```
+
+```json
+{
+  "name": "rag_storage_status",
+  "arguments": {}
+}
+```
+
+```json
+{
+  "name": "clear_rag_storage",
+  "arguments": {}
 }
 ```
 
@@ -258,10 +362,12 @@ const tool: Tool = {
 ## 🔍 RAG Workflow
 
 1. **Document Indexing**: Documents are processed and stored in a vector index
-2. **Query Processing**: Natural language queries are converted to vector searches
-3. **Context Retrieval**: Relevant document chunks are retrieved
-4. **Response Generation**: LLM generates responses using retrieved context
-5. **Source Attribution**: Responses include source document information
+2. **Automatic Persistence**: Documents are automatically saved to disk after indexing
+3. **Query Processing**: Natural language queries are converted to vector searches
+4. **Context Retrieval**: Relevant document chunks are retrieved
+5. **Response Generation**: LLM generates responses using retrieved context
+6. **Source Attribution**: Responses include source document information
+7. **Cross-Session Persistence**: Documents persist across Cursor restarts and server restarts
 
 ## 🚨 Troubleshooting
 
@@ -296,7 +402,7 @@ DEBUG=* npm start
 
 - [ ] Multi-agent workflows with handoffs
 - [ ] Advanced streaming with real-time updates
-- [ ] Persistent document storage across sessions
+- [x] **Persistent document storage across sessions** ✅
 - [ ] Custom tool development framework
 - [ ] Performance monitoring and metrics
 - [ ] Integration with more LLM providers
@@ -341,3 +447,4 @@ For support and questions:
    - Try `mcp_local-llm-proxy_chat_completion` with agentic capabilities
    - Index documents with `mcp_local-llm-proxy_index_document`
    - Query with `mcp_local-llm-proxy_rag_query`
+   - **Test persistence**: Index documents, restart Cursor, and query again - your documents will persist!
