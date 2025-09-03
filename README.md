@@ -116,12 +116,24 @@ graph TB
 5. `save_rag_storage` - Manually save RAG documents to disk
 6. `clear_rag_storage` - Clear all persistent RAG storage
 7. `rag_storage_status` - Get RAG storage status and persistence info
+8. `sonar_query` - Real-time information gathering with Perplexity Sonar API
+9. `delegate_to_local_llm` - Delegate requests to the local LLM orchestrator
+10. `orchestrator_status` - Get orchestrator status and connected tools
+11. `list_orchestrated_tools` - List all available orchestrated tools
+12. `call_orchestrated_tool` - Call specific orchestrated tools directly
 
 ### 🌐 LM Studio Integration
 - OpenAI-compatible API integration
 - Support for Quen3 and other local models
 - Configurable base URL and model selection
 - Environment variable configuration
+
+### 🎯 MCP Orchestrator
+- **Tool Discovery**: Automatically discovers and connects to other MCP servers
+- **Intelligent Routing**: Routes queries to appropriate tools based on content analysis
+- **Web Search Integration**: Prioritizes real-time information gathering with Sonar API
+- **Fallback System**: Graceful fallback to Cursor when needed
+- **Rules-Based Selection**: Configurable rules for tool selection and usage
 
 ### 🔄 Intelligent Validation & Fallback System
 - **Heuristic-based validation** for response quality assessment
@@ -222,6 +234,15 @@ The server can be configured using environment variables:
 
 - `LM_STUDIO_BASE_URL`: LM Studio API endpoint (default: `http://localhost:1234/v1`)
 - `LM_STUDIO_MODEL`: Model name in LM Studio (default: `qwen3`)
+
+### Real-time Information with Sonar API
+
+For real-time information gathering capabilities, the server includes Perplexity Sonar API integration. See [SONAR_INTEGRATION_README.md](SONAR_INTEGRATION_README.md) for detailed setup instructions including:
+
+- API key configuration
+- Environment variable setup
+- Usage examples
+- Cost considerations
 
 ## 📋 API Examples
 
