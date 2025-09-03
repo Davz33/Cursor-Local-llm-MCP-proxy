@@ -1,0 +1,155 @@
+{
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "default-allow-all",
+      "name": "Allow All Tools",
+      "description": "Default rule to allow all tool usage",
+      "conditions": [
+        {
+          "type": "always",
+          "value": "true"
+        }
+      ],
+      "actions": [
+        {
+          "type": "allow_tool"
+        },
+        {
+          "type": "log_usage"
+        },
+        {
+          "type": "validate_response"
+        }
+      ],
+      "priority": 1,
+      "enabled": true
+    },
+    {
+      "id": "save-important-to-rag",
+      "name": "Save Important Information to RAG",
+      "description": "Save responses containing important information to RAG",
+      "conditions": [
+        {
+          "type": "prompt_contains",
+          "value": "important",
+          "operator": "contains"
+        }
+      ],
+      "actions": [
+        {
+          "type": "save_to_rag"
+        },
+        {
+          "type": "log_usage"
+        }
+      ],
+      "priority": 5,
+      "enabled": true
+    },
+    {
+      "id": "save-documentation-to-rag",
+      "name": "Save Documentation to RAG",
+      "description": "Save documentation-related responses to RAG",
+      "conditions": [
+        {
+          "type": "prompt_contains",
+          "value": "document",
+          "operator": "contains"
+        }
+      ],
+      "actions": [
+        {
+          "type": "save_to_rag"
+        },
+        {
+          "type": "log_usage"
+        }
+      ],
+      "priority": 5,
+      "enabled": true
+    },
+    {
+      "id": "fallback-on-error",
+      "name": "Fallback to Cursor on Error",
+      "description": "Fallback to Cursor when local LLM fails",
+      "conditions": [
+        {
+          "type": "context_has",
+          "value": "error"
+        }
+      ],
+      "actions": [
+        {
+          "type": "fallback_to_cursor"
+        },
+        {
+          "type": "log_usage"
+        }
+      ],
+      "priority": 10,
+      "enabled": true
+    },
+    {
+      "id": "validate-complex-responses",
+      "name": "Validate Complex Responses",
+      "description": "Always validate responses for complex queries",
+      "conditions": [
+        {
+          "type": "prompt_contains",
+          "value": "complex",
+          "operator": "contains"
+        }
+      ],
+      "actions": [
+        {
+          "type": "validate_response"
+        },
+        {
+          "type": "log_usage"
+        }
+      ],
+      "priority": 7,
+      "enabled": true
+    },
+    {
+      "id": "require-approval-for-file-operations",
+      "name": "Require Approval for File Operations",
+      "description": "Require approval before executing file operations",
+      "conditions": [
+        {
+          "type": "tool_name",
+          "value": "file",
+          "operator": "contains"
+        }
+      ],
+      "actions": [
+        {
+          "type": "require_approval"
+        },
+        {
+          "type": "log_usage"
+        }
+      ],
+      "priority": 8,
+      "enabled": true
+    }
+  ],
+  "defaultActions": {
+    "onToolUse": [
+      {
+        "type": "log_usage"
+      }
+    ],
+    "onResponse": [
+      {
+        "type": "validate_response"
+      }
+    ],
+    "onError": [
+      {
+        "type": "fallback_to_cursor"
+      }
+    ]
+  }
+}

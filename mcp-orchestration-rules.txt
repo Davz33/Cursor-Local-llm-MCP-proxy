@@ -1,0 +1,46 @@
+# MCP Orchestration Rules
+# Simple rules for local LLM to decide which MCP servers to call
+
+## Memory Operations
+- For creating entities: use memory.create_entities
+- For creating relations: use memory.create_relations
+- For listing projects: use memory-bank-mcp.list_projects
+- For reading memory: use memory-bank-mcp.memory_bank_read
+- For writing memory: use memory-bank-mcp.memory_bank_write
+
+## Thinking Operations  
+- For complex analysis: use sequential-thinking.sequentialthinking
+- For step-by-step reasoning: use sequential-thinking.sequentialthinking
+- For breaking down problems: use sequential-thinking.sequentialthinking
+
+## Documentation Operations
+- For library docs: use context7.resolve-library-id then context7.get-library-docs
+- For web content: use website-downloader.download_website
+
+## RAG Operations
+- For saving content: use local-llm-proxy.index_document
+- For querying: use local-llm-proxy.rag_query
+- For saving storage: use local-llm-proxy.save_rag_storage
+
+## Image Operations
+- For generating images: use image-gen.generate_image
+
+## OCR Operations
+- For text extraction: use ocr.extract_text
+
+## Git Operations
+- For git operations: use git.* tools
+
+## GitHub Operations
+- For GitHub operations: use github.* tools
+
+## Coding Operations
+- For code suggestions: use coding-assistant.get_suggestions
+- For documentation: use coding-assistant.add_documentation
+
+## General Rules
+- Always use the most specific tool for the task
+- If multiple tools could work, choose the most appropriate one
+- Handle errors gracefully and provide fallbacks
+- Use real tool calls, not simulation
+

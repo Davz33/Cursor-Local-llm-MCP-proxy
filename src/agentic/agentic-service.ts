@@ -3,17 +3,21 @@ import { configureSettings } from "../config/llm-config.js";
 import { getAvailableToolsWithContext } from "../tools/agentic-tools.js";
 import type { ToolExecutionContext } from "../tools/agentic-tools.js";
 import { RAGService } from "../rag/rag-service.js";
+import { OrchestratorService, OrchestratorOptions } from "../orchestrator/orchestrator-service.js";
 
 export interface AgenticOptions {
   maxTokens?: number;
   temperature?: number;
   useTools?: boolean;
+  useOrchestrator?: boolean;
+  orchestratorOptions?: OrchestratorOptions;
 }
 
 export interface AgenticResult {
   response: string;
   toolsUsed: string[];
   metadata?: Record<string, unknown>;
+  orchestratorResult?: any;
 }
 
 /**
@@ -22,6 +26,7 @@ export interface AgenticResult {
 export class AgenticService {
   private llm: LLM;
   private ragService: RAGService;
+  private orchestratorService: OrchestratorService | null = null;
 
   constructor() {
     // Configure global settings and get LLM instance
@@ -35,6 +40,13 @@ export class AgenticService {
    */
   async initialize(): Promise<void> {
     await this.ragService.initialize();
+    
+    // Initialize orchestrator service if needed
+    if (process.env.ENABLE_MCP_ORCHESTRATOR === "true") {
+      this.orchestratorService = new OrchestratorService(this.llm, this.ragService);
+      await this.orchestratorService.initialize();
+      console.error("Agentic Service: MCP Orchestrator initialized");
+    }
   }
 
   /**
@@ -44,10 +56,38 @@ export class AgenticService {
     const {
       maxTokens = 1000,
       temperature = 0.7,
-      useTools = true
+      useTools = true,
+      useOrchestrator = false,
+      orchestratorOptions = {}
     } = options;
 
     try {
+      // Use orchestrator if enabled and available
+      if (useOrchestrator && this.orchestratorService) {
+        console.error("Agentic Service: Using MCP Orchestrator");
+        const orchestratorResult = await this.orchestratorService.processQuery(prompt, {
+          maxTokens,
+          temperature,
+          ...orchestratorOptions
+        });
+
+        return {
+          response: orchestratorResult.response,
+          toolsUsed: orchestratorResult.toolsUsed,
+          orchestratorResult,
+          metadata: {
+            maxTokens,
+            temperature,
+            useTools,
+            useOrchestrator: true,
+            usedLocalLLM: orchestratorResult.usedLocalLLM,
+            fallbackUsed: orchestratorResult.fallbackUsed,
+            savedToRAG: orchestratorResult.savedToRAG
+          }
+        };
+      }
+
+      // Fallback to original logic
       let toolsUsed: string[] = [];
       let response = "";
 
@@ -90,7 +130,8 @@ export class AgenticService {
         metadata: {
           maxTokens,
           temperature,
-          useTools
+          useTools,
+          useOrchestrator: false
         }
       };
     } catch (error) {
@@ -209,5 +250,19 @@ export class AgenticService {
    */
   getRAGService(): RAGService {
     return this.ragService;
+  }
+
+  /**
+   * Get orchestrator service instance
+   */
+  getOrchestratorService(): OrchestratorService | null {
+    return this.orchestratorService;
+  }
+
+  /**
+   * Get orchestrator status
+   */
+  getOrchestratorStatus(): any {
+    return this.orchestratorService?.getStatus() || null;
   }
 }

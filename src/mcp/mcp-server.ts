@@ -12,6 +12,7 @@ export interface GenerateTextArgs {
   max_tokens?: number;
   temperature?: number;
   use_agentic?: boolean;
+  use_orchestrator?: boolean;
   stream?: boolean;
 }
 
@@ -23,6 +24,7 @@ export interface ChatCompletionArgs {
   max_tokens?: number;
   temperature?: number;
   use_agentic?: boolean;
+  use_orchestrator?: boolean;
   stream?: boolean;
 }
 
@@ -212,6 +214,92 @@ export class LocalLLMProxyServer {
               properties: {},
             },
           },
+          {
+            name: "orchestrator_status",
+            description: "Get status of MCP orchestrator and connected servers",
+            inputSchema: {
+              type: "object",
+              properties: {},
+            },
+          },
+          {
+            name: "discover_mcp_servers",
+            description: "Discover and connect to MCP servers from cursor configuration",
+            inputSchema: {
+              type: "object",
+              properties: {
+                auto_connect: {
+                  type: "boolean",
+                  description: "Whether to automatically connect to discovered servers",
+                  default: true,
+                },
+              },
+            },
+          },
+          {
+            name: "list_orchestrated_tools",
+            description: "List all tools available from orchestrated MCP servers",
+            inputSchema: {
+              type: "object",
+              properties: {},
+            },
+          },
+          {
+            name: "call_orchestrated_tool",
+            description: "Call any tool from orchestrated MCP servers through the orchestrator",
+            inputSchema: {
+              type: "object",
+              properties: {
+                server_name: {
+                  type: "string",
+                  description: "Name of the MCP server to call the tool on"
+                },
+                tool_name: {
+                  type: "string", 
+                  description: "Name of the tool to call"
+                },
+                arguments: {
+                  type: "object",
+                  description: "Arguments to pass to the tool"
+                }
+              },
+              required: ["server_name", "tool_name"]
+            },
+          },
+          {
+            name: "delegate_to_local_llm",
+            description: "Delegate the entire request to local LLM with full orchestrator access and intelligent tool coordination",
+            inputSchema: {
+              type: "object",
+              properties: {
+                prompt: {
+                  type: "string",
+                  description: "The complete prompt/request to process"
+                },
+                context: {
+                  type: "object",
+                  description: "Additional context for the request",
+                  default: {}
+                },
+                max_tokens: {
+                  type: "number",
+                  description: "Maximum tokens for response generation",
+                  default: 2000
+                },
+                temperature: {
+                  type: "number",
+                  description: "Temperature for response generation",
+                  default: 0.7
+                },
+                enable_validation: {
+                  type: "boolean",
+                  description: "Enable response validation and fallback",
+                  default: true
+                }
+              },
+              required: ["prompt"]
+            },
+          },
         ],
       };
     });
@@ -244,6 +332,16 @@ export class LocalLLMProxyServer {
             return await this.handleClearRAGStorage();
           case "rag_storage_status":
             return await this.handleRAGStorageStatus();
+          case "orchestrator_status":
+            return await this.handleOrchestratorStatus();
+          case "discover_mcp_servers":
+            return await this.handleDiscoverMCPServers(args as { auto_connect?: boolean });
+          case "list_orchestrated_tools":
+            return await this.handleListOrchestratedTools();
+          case "call_orchestrated_tool":
+            return await this.handleCallOrchestratedTool(args as { server_name: string; tool_name: string; arguments?: any });
+          case "delegate_to_local_llm":
+            return await this.handleDelegateToLocalLLM(args as { prompt: string; context?: any; max_tokens?: number; temperature?: number; enable_validation?: boolean });
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -263,20 +361,32 @@ export class LocalLLMProxyServer {
   }
 
   async handleGenerateText(args: GenerateTextArgs) {
-    const { prompt, max_tokens = 1000, temperature = 0.7, use_agentic = true, stream = false } = args;
+    const { prompt, max_tokens = 1000, temperature = 0.7, use_agentic = true, use_orchestrator = false, stream = false } = args;
 
     try {
       const result = await this.agenticService.runAgenticQuery(prompt, {
         maxTokens: max_tokens,
         temperature,
-        useTools: use_agentic
+        useTools: use_agentic,
+        useOrchestrator: use_orchestrator
       });
+
+      let responseText = result.response;
+      
+      // Add orchestrator metadata if available
+      if (result.orchestratorResult) {
+        responseText += `\n\n--- Orchestrator Info ---\n`;
+        responseText += `Tools Used: ${result.orchestratorResult.toolsUsed.join(', ')}\n`;
+        responseText += `Used Local LLM: ${result.orchestratorResult.usedLocalLLM}\n`;
+        responseText += `Fallback Used: ${result.orchestratorResult.fallbackUsed}\n`;
+        responseText += `Saved to RAG: ${result.orchestratorResult.savedToRAG}\n`;
+      }
 
       return {
         content: [
           {
             type: "text",
-            text: result.response,
+            text: responseText,
           },
         ],
       };
@@ -450,6 +560,228 @@ export class LocalLLMProxyServer {
     
     // Setup graceful shutdown
     this.setupGracefulShutdown();
+  }
+
+  /**
+   * Handle orchestrator status request
+   */
+  private async handleOrchestratorStatus() {
+    try {
+      const status = this.agenticService.getOrchestratorStatus();
+      if (!status) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "MCP Orchestrator is not enabled. Set ENABLE_MCP_ORCHESTRATOR=true to enable.",
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `MCP Orchestrator Status:
+Discovery: ${JSON.stringify(status.discovery, null, 2)}
+Connections: ${JSON.stringify(status.connections, null, 2)}
+Rules: ${JSON.stringify(status.rules, null, 2)}
+Validation: ${JSON.stringify(status.validation, null, 2)}`,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(`Failed to get orchestrator status: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Handle discover MCP servers request
+   */
+  private async handleDiscoverMCPServers(args: { auto_connect?: boolean }) {
+    try {
+      const orchestrator = this.agenticService.getOrchestratorService();
+      if (!orchestrator) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "MCP Orchestrator is not enabled. Set ENABLE_MCP_ORCHESTRATOR=true to enable.",
+            },
+          ],
+        };
+      }
+
+      // Re-discover servers
+      const discoveryService = (orchestrator as any).discoveryService;
+      const servers = await discoveryService.discoverMCPServers();
+      
+      let result = `Discovered ${servers.length} MCP servers:\n`;
+      for (const server of servers) {
+        result += `- ${server.name}: ${server.status}\n`;
+      }
+
+      if (args.auto_connect !== false) {
+        const clientManager = (orchestrator as any).clientManager;
+        const { successful, failed } = await clientManager.connectToAllDiscoveredServers();
+        result += `\nConnection Results:\n`;
+        result += `- Successful: ${successful.join(', ')}\n`;
+        result += `- Failed: ${failed.join(', ')}\n`;
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: result,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(`Failed to discover MCP servers: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Handle list orchestrated tools request
+   */
+  private async handleListOrchestratedTools() {
+    try {
+      const orchestrator = this.agenticService.getOrchestratorService();
+      if (!orchestrator) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "MCP Orchestrator is not enabled. Set ENABLE_MCP_ORCHESTRATOR=true to enable.",
+            },
+          ],
+        };
+      }
+
+      const tools = orchestrator.getAvailableTools();
+      let result = `Available orchestrated tools (${tools.length}):\n`;
+      
+      for (const tool of tools) {
+        result += `- ${tool.name} (from ${tool.serverName}): ${tool.description}\n`;
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: result,
+          },
+        ],
+      };
+    } catch (error) {
+      throw new Error(`Failed to list orchestrated tools: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Handle call orchestrated tool request
+   */
+  private async handleCallOrchestratedTool(args: { server_name: string; tool_name: string; arguments?: any }) {
+    try {
+      const orchestrator = this.agenticService.getOrchestratorService();
+      if (!orchestrator) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "MCP Orchestrator is not enabled. Set ENABLE_MCP_ORCHESTRATOR=true to enable.",
+            },
+          ],
+        };
+      }
+
+      const { server_name, tool_name, arguments: toolArgs } = args;
+      
+      // Log the call attempt
+      console.error(`🎯 CURSOR REQUESTING ORCHESTRATED TOOL: ${server_name}.${tool_name}`);
+      console.error(`🎯 CURSOR ARGS:`, JSON.stringify(toolArgs, null, 2));
+
+      // Get the client manager from orchestrator
+      const clientManager = (orchestrator as any).clientManager;
+      const result = await clientManager.callTool(server_name, tool_name, toolArgs || {});
+
+      console.error(`🎯 CURSOR ORCHESTRATED TOOL RESULT: ${server_name}.${tool_name} completed`);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Orchestrated tool call successful:\nServer: ${server_name}\nTool: ${tool_name}\nResult: ${JSON.stringify(result, null, 2)}`,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error(`❌ CURSOR ORCHESTRATED TOOL ERROR:`, (error as Error).message);
+      throw new Error(`Failed to call orchestrated tool: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Handle delegate to local LLM request
+   */
+  private async handleDelegateToLocalLLM(args: { 
+    prompt: string; 
+    context?: any; 
+    max_tokens?: number; 
+    temperature?: number; 
+    enable_validation?: boolean 
+  }) {
+    try {
+      const { prompt, context = {}, max_tokens = 2000, temperature = 0.7, enable_validation = true } = args;
+      
+      console.error(`🧠 DELEGATING TO LOCAL LLM: ${prompt.substring(0, 100)}...`);
+      console.error(`🧠 DELEGATION CONTEXT:`, JSON.stringify(context, null, 2));
+
+      // Use the agentic service with orchestrator enabled
+      const result = await this.agenticService.runAgenticQuery(prompt, {
+        maxTokens: max_tokens,
+        temperature,
+        useTools: true,
+        useOrchestrator: true,
+        orchestratorOptions: {
+          enableValidation: enable_validation,
+          enableRules: true,
+          enableRAG: true,
+          fallbackToCursor: enable_validation
+        }
+      });
+
+      let responseText = result.response;
+      
+      // Add delegation metadata
+      responseText += `\n\n--- Local LLM Delegation Info ---\n`;
+      responseText += `Tools Used: ${result.toolsUsed.join(', ')}\n`;
+      responseText += `Used Local LLM: ${result.metadata?.usedLocalLLM || 'Unknown'}\n`;
+      responseText += `Fallback Used: ${result.metadata?.fallbackUsed || 'Unknown'}\n`;
+      responseText += `Saved to RAG: ${result.metadata?.savedToRAG || 'Unknown'}\n`;
+      
+      if (result.orchestratorResult) {
+        responseText += `Orchestrator Tools: ${result.orchestratorResult.toolsUsed.join(', ')}\n`;
+        responseText += `Validation Applied: ${result.orchestratorResult.validationResult ? 'Yes' : 'No'}\n`;
+        responseText += `Rules Applied: ${result.orchestratorResult.ruleEvaluation ? 'Yes' : 'No'}\n`;
+      }
+
+      console.error(`🧠 LOCAL LLM DELEGATION COMPLETED: ${result.toolsUsed.length} tools used`);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error(`❌ LOCAL LLM DELEGATION ERROR:`, (error as Error).message);
+      throw new Error(`Failed to delegate to local LLM: ${(error as Error).message}`);
+    }
   }
 
   /**
