@@ -758,9 +758,9 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
       // Add delegation metadata
       responseText += `\n\n--- Local LLM Delegation Info ---\n`;
       responseText += `Tools Used: ${result.toolsUsed.join(', ')}\n`;
-      responseText += `Used Local LLM: ${result.metadata?.usedLocalLLM || 'Unknown'}\n`;
-      responseText += `Fallback Used: ${result.metadata?.fallbackUsed || 'Unknown'}\n`;
-      responseText += `Saved to RAG: ${result.metadata?.savedToRAG || 'Unknown'}\n`;
+      responseText += `Used Local LLM: ${result.orchestratorResult?.usedLocalLLM ?? result.metadata?.usedLocalLLM ?? 'Unknown'}\n`;
+      responseText += `Fallback Used: ${result.orchestratorResult?.fallbackUsed ?? result.metadata?.fallbackUsed ?? 'Unknown'}\n`;
+      responseText += `Saved to RAG: ${result.orchestratorResult?.savedToRAG ?? result.metadata?.savedToRAG ?? 'Unknown'}\n`;
       
       if (result.orchestratorResult) {
         responseText += `Orchestrator Tools: ${result.orchestratorResult.toolsUsed.join(', ')}\n`;

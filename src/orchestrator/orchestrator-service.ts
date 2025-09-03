@@ -224,10 +224,15 @@ export class OrchestratorService {
    */
   private readOrchestrationRules(): string {
     try {
-      const rulesPath = join(process.cwd(), "mcp-orchestration-rules.txt");
+      // Use environment variable for rules path, fallback to default location
+      const rulesPath = process.env.MCP_ORCHESTRATION_RULES_PATH || 
+                       join(process.env.HOME || process.env.USERPROFILE || "", "local-llm-proxy", "mcp-orchestration-rules.txt");
+      
+      console.log(`Orchestrator: Reading rules from: ${rulesPath}`);
       return readFileSync(rulesPath, "utf-8");
     } catch (error) {
       console.error("Orchestrator: Failed to read orchestration rules:", (error as Error).message);
+      console.error("Orchestrator: Using default rules");
       return "# Default orchestration rules\n- Use available tools based on prompt analysis";
     }
   }
@@ -251,6 +256,8 @@ Request: "${prompt}"
 Available Tools:
 ${availableTools.map(t => `- ${t.name} (${t.serverName}): ${t.description}`).join('\n')}
 
+IMPORTANT: For complex analysis, planning, problem-solving, or multi-step reasoning tasks, ALWAYS include "sequentialthinking" tool.
+
 Orchestration Rules:
 ${rules}
 
@@ -271,13 +278,46 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
       console.error("Orchestrator: Failed to select tools using rules, using fallback:", (error as Error).message);
     }
 
-    // Fallback to simple keyword matching
+    // Fallback to simple keyword matching with enhanced logic
     const selectedTools: MCPTool[] = [];
     const promptLower = prompt.toLowerCase();
 
+    // Check for sequential thinking patterns first
+    const sequentialThinkingPatterns = [
+      'analyze', 'analysis', 'think', 'thinking', 'reason', 'reasoning',
+      'plan', 'planning', 'design', 'designing', 'strategy', 'strategic',
+      'complex', 'complicated', 'multi-step', 'step by step', 'break down',
+      'evaluate', 'evaluation', 'assess', 'assessment', 'consider',
+      'problem', 'solution', 'approach', 'methodology', 'framework',
+      'architecture', 'implementation', 'recommendation', 'recommendations',
+      'comprehensive', 'detailed', 'thorough', 'in-depth', 'deep dive'
+    ];
+
+    const shouldUseSequentialThinking = sequentialThinkingPatterns.some(pattern => 
+      promptLower.includes(pattern)
+    );
+
+    console.error(`Orchestrator: Sequential thinking check - prompt: "${promptLower}"`);
+    console.error(`Orchestrator: Should use sequential thinking: ${shouldUseSequentialThinking}`);
+
+    // Always include sequential thinking for complex analysis tasks
+    if (shouldUseSequentialThinking) {
+      const sequentialTool = availableTools.find(tool => tool.name === 'sequentialthinking');
+      if (sequentialTool) {
+        selectedTools.push(sequentialTool);
+        console.error("Orchestrator: Added sequential thinking tool for complex analysis");
+      }
+    }
+
+    // Check for other tools
     for (const tool of availableTools) {
       const toolNameLower = tool.name.toLowerCase();
       const descriptionLower = tool.description.toLowerCase();
+
+      // Skip sequential thinking if already added
+      if (tool.name === 'sequentialthinking' && shouldUseSequentialThinking) {
+        continue;
+      }
 
       if (
         promptLower.includes(toolNameLower) ||
@@ -288,6 +328,7 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
       }
     }
 
+    console.error(`Orchestrator: Selected tools: ${selectedTools.map(t => t.name).join(', ')}`);
     return selectedTools;
   }
 
@@ -309,9 +350,9 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
     if (toolName.includes('sequential') || toolName.includes('thinking')) {
       return {
         thought: prompt,
-        nextThoughtNeeded: true,
-        thoughtNumber: 1,
-        totalThoughts: 3
+        next_thought_needed: true,
+        thought_number: 1, // Correct parameter name
+        total_thoughts: 3  // Correct parameter name
       };
     }
     
@@ -487,6 +528,16 @@ Format: {"argument_name": "value"}`;
           const jsonMatch = argsResponse.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             toolArgs = JSON.parse(jsonMatch[0]);
+            
+            // Fix numeric parameters for sequential thinking tool
+            if (tool.name === 'sequentialthinking') {
+              if (toolArgs.thought_number) {
+                toolArgs.thought_number = parseInt(toolArgs.thought_number) || 1;
+              }
+              if (toolArgs.total_thoughts) {
+                toolArgs.total_thoughts = parseInt(toolArgs.total_thoughts) || 3;
+              }
+            }
           } else {
             throw new Error("No JSON found in args response");
           }
@@ -502,8 +553,16 @@ Format: {"argument_name": "value"}`;
         toolsUsed.push(tool.name);
         toolResults.push(`Tool ${tool.name}: ${JSON.stringify(result)}`);
       } catch (error) {
-        console.error(`Orchestrator: Error executing tool ${tool.name}:`, (error as Error).message);
-        toolResults.push(`Tool ${tool.name} failed: ${(error as Error).message}`);
+        const errorMessage = (error as Error).message;
+        console.error(`❌ ORCHESTRATOR ERROR: ${tool.name} - ${errorMessage}`);
+        console.error(`Orchestrator: Tool execution failed for ${tool.name} from server ${tool.serverName}`);
+        console.error(`Orchestrator: Error details: ${errorMessage}`);
+        console.error(`Orchestrator: Context when error occurred: ${JSON.stringify(context, null, 2)}`);
+        
+        // Add detailed error information for fallback system
+        toolResults.push(`❌ ORCHESTRATOR ERROR: ${tool.name} (${tool.serverName}) - ${errorMessage}`);
+        toolResults.push(`Context: ${JSON.stringify(context, null, 2)}`);
+        toolResults.push(`Requesting fallback assistance for tool: ${tool.name}`);
       }
     }
 

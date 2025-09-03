@@ -88,6 +88,15 @@ export class ValidationService {
         safetyCheck.issues.length > 0
       );
 
+      // Log validation results for fallback system
+      if (shouldFallback) {
+        console.error(`⚠️ VALIDATION WARNING: Response quality below threshold`);
+        console.error(`⚠️ VALIDATION WARNING: Confidence: ${confidence.toFixed(2)} (min: ${opts.minConfidence ?? 0.7})`);
+        console.error(`⚠️ VALIDATION WARNING: Issues count: ${allIssues.length} (max: ${opts.maxIssues ?? 3})`);
+        console.error(`⚠️ VALIDATION WARNING: Safety issues: ${safetyCheck.issues.length}`);
+        console.error(`⚠️ VALIDATION WARNING: Requesting fallback assistance for response quality improvement`);
+      }
+
       return {
         isValid: confidence >= (opts.minConfidence ?? 0.7) && allIssues.length <= (opts.maxIssues ?? 3),
         confidence,
@@ -117,50 +126,63 @@ export class ValidationService {
   }
 
   /**
-   * Validate response coherence
+   * Validate response coherence - simple heuristic-based validation
    */
   private async validateCoherence(prompt: string, response: string): Promise<ValidationResult> {
     try {
-      const validationPrompt = `
-Analyze the coherence of this AI response to the given prompt.
+      const issues: string[] = [];
+      const suggestions: string[] = [];
+      let confidence = 1.0;
 
-Prompt: "${prompt}"
+      // Check for error indicators
+      if (response.includes("Error:") || response.includes("Failed:") || response.includes("❌")) {
+        issues.push("Response contains error indicators");
+        confidence -= 0.4;
+      }
 
-Response: "${response}"
+      // Check for expressions of inability
+      const inabilityPatterns = [
+        /I cannot/i,
+        /I can't/i,
+        /I'm unable to/i,
+        /I don't have access to/i,
+        /I don't have permission to/i,
+        /I'm not able to/i,
+        /I cannot access/i,
+        /I cannot find/i,
+        /I cannot locate/i,
+        /I don't know how to/i,
+        /I'm not sure how to/i,
+        /I don't have the ability to/i
+      ];
 
-Evaluate:
-1. Does the response directly address the prompt?
-2. Is the response logically structured?
-3. Are there any contradictions or inconsistencies?
-4. Is the tone appropriate?
+      const hasInability = inabilityPatterns.some(pattern => pattern.test(response));
+      if (hasInability) {
+        issues.push("Response expresses inability to perform requested action");
+        confidence -= 0.3;
+        suggestions.push("Consider using fallback system for better capability");
+      }
 
-Provide a confidence score (0-1) and list any issues or suggestions.
-Format your response as JSON:
-{
-  "confidence": 0.8,
-  "issues": ["issue1", "issue2"],
-  "suggestions": ["suggestion1", "suggestion2"]
-}
-`;
+      // Check if response is too short (less than 50 characters for most requests)
+      if (response.trim().length < 50) {
+        issues.push("Response is too short to be comprehensive");
+        confidence -= 0.2;
+        suggestions.push("Response should provide more detail");
+      }
 
-      // TODO: Implement actual LLM call when LLM API is fixed
-      // const result = await this.llm.complete({ prompt: validationPrompt });
-      // const parsed = JSON.parse(result.text);
-      
-      // Mock response for now
-      const parsed = {
-        confidence: 0.8,
-        issues: [],
-        suggestions: []
-      };
+      // Check for basic coherence (response should contain some substance)
+      if (response.trim().length < 20) {
+        issues.push("Response is extremely short");
+        confidence -= 0.5;
+      }
 
       return {
-        isValid: parsed.confidence >= 0.7,
-        confidence: parsed.confidence,
-        issues: parsed.issues || [],
-        suggestions: parsed.suggestions || [],
-        shouldFallback: false,
-        metadata: { type: "coherence" }
+        isValid: confidence >= 0.7,
+        confidence: Math.max(0, confidence),
+        issues,
+        suggestions,
+        shouldFallback: confidence < 0.7,
+        metadata: { type: "coherence", hasInability, responseLength: response.length }
       };
     } catch (error) {
       return {
@@ -168,14 +190,14 @@ Format your response as JSON:
         confidence: 0.5,
         issues: [`Coherence validation failed: ${(error as Error).message}`],
         suggestions: ["Manual review recommended"],
-        shouldFallback: false,
+        shouldFallback: true,
         metadata: { type: "coherence", error: (error as Error).message }
       };
     }
   }
 
   /**
-   * Validate response accuracy
+   * Validate response accuracy - simple heuristic-based validation
    */
   private async validateAccuracy(
     prompt: string,
@@ -183,48 +205,43 @@ Format your response as JSON:
     context: Record<string, any>
   ): Promise<ValidationResult> {
     try {
-      const validationPrompt = `
-Analyze the accuracy of this AI response to the given prompt.
+      const issues: string[] = [];
+      const suggestions: string[] = [];
+      let confidence = 1.0;
 
-Prompt: "${prompt}"
+      // Check for obvious inaccuracies or contradictions
+      if (response.includes("I don't know") || response.includes("I'm not sure")) {
+        issues.push("Response contains uncertainty about facts");
+        confidence -= 0.2;
+      }
 
-Response: "${response}"
+      // Check if response contradicts context
+      if (context && Object.keys(context).length > 0) {
+        // Simple check: if context has specific data but response doesn't reference it
+        const contextKeys = Object.keys(context);
+        const hasContextReference = contextKeys.some(key => 
+          response.toLowerCase().includes(key.toLowerCase())
+        );
+        
+        if (!hasContextReference && contextKeys.length > 0) {
+          issues.push("Response doesn't reference provided context");
+          confidence -= 0.1;
+        }
+      }
 
-Context: ${JSON.stringify(context, null, 2)}
-
-Evaluate:
-1. Are the facts presented accurate?
-2. Are calculations correct?
-3. Are references and citations valid?
-4. Does the response align with the provided context?
-
-Provide a confidence score (0-1) and list any issues or suggestions.
-Format your response as JSON:
-{
-  "confidence": 0.8,
-  "issues": ["issue1", "issue2"],
-  "suggestions": ["suggestion1", "suggestion2"]
-}
-`;
-
-      // TODO: Implement actual LLM call when LLM API is fixed
-      // const result = await this.llm.complete({ prompt: validationPrompt });
-      // const parsed = JSON.parse(result.text);
-      
-      // Mock response for now
-      const parsed = {
-        confidence: 0.75,
-        issues: [],
-        suggestions: []
-      };
+      // Check for placeholder or template responses
+      if (response.includes("[PLACEHOLDER]") || response.includes("TODO") || response.includes("FIXME")) {
+        issues.push("Response contains placeholder or incomplete content");
+        confidence -= 0.3;
+      }
 
       return {
-        isValid: parsed.confidence >= 0.7,
-        confidence: parsed.confidence,
-        issues: parsed.issues || [],
-        suggestions: parsed.suggestions || [],
-        shouldFallback: false,
-        metadata: { type: "accuracy" }
+        isValid: confidence >= 0.7,
+        confidence: Math.max(0, confidence),
+        issues,
+        suggestions,
+        shouldFallback: confidence < 0.7,
+        metadata: { type: "accuracy", hasContextReference: context && Object.keys(context).length > 0 }
       };
     } catch (error) {
       return {
@@ -232,57 +249,58 @@ Format your response as JSON:
         confidence: 0.5,
         issues: [`Accuracy validation failed: ${(error as Error).message}`],
         suggestions: ["Manual review recommended"],
-        shouldFallback: false,
+        shouldFallback: true,
         metadata: { type: "accuracy", error: (error as Error).message }
       };
     }
   }
 
   /**
-   * Validate response completeness
+   * Validate response completeness - simple heuristic-based validation
    */
   private async validateCompleteness(prompt: string, response: string): Promise<ValidationResult> {
     try {
-      const validationPrompt = `
-Analyze the completeness of this AI response to the given prompt.
+      const issues: string[] = [];
+      const suggestions: string[] = [];
+      let confidence = 1.0;
 
-Prompt: "${prompt}"
-
-Response: "${response}"
-
-Evaluate:
-1. Does the response fully address all parts of the prompt?
-2. Are there any missing important details?
-3. Is the response appropriately detailed for the request?
-4. Are there any unanswered questions?
-
-Provide a confidence score (0-1) and list any issues or suggestions.
-Format your response as JSON:
-{
-  "confidence": 0.8,
-  "issues": ["issue1", "issue2"],
-  "suggestions": ["suggestion1", "suggestion2"]
-}
-`;
-
-      // TODO: Implement actual LLM call when LLM API is fixed
-      // const result = await this.llm.complete({ prompt: validationPrompt });
-      // const parsed = JSON.parse(result.text);
+      // Check if response is too short for the prompt complexity
+      const promptWords = prompt.split(/\s+/).length;
+      const responseWords = response.split(/\s+/).length;
       
-      // Mock response for now
-      const parsed = {
-        confidence: 0.8,
-        issues: [],
-        suggestions: []
-      };
+      // If prompt is complex (many words) but response is very short
+      if (promptWords > 20 && responseWords < 30) {
+        issues.push("Response is too short for a complex prompt");
+        confidence -= 0.3;
+        suggestions.push("Response should provide more comprehensive coverage");
+      }
+
+      // Check for incomplete sentences or cut-off responses
+      if (response.endsWith("...") || response.endsWith("etc.") || response.endsWith("and so on")) {
+        issues.push("Response appears to be cut off or incomplete");
+        confidence -= 0.2;
+      }
+
+      // Check if response addresses key prompt elements
+      const promptLower = prompt.toLowerCase();
+      const responseLower = response.toLowerCase();
+      
+      // Look for question words in prompt
+      const questionWords = ["what", "how", "why", "when", "where", "which", "who"];
+      const hasQuestions = questionWords.some(word => promptLower.includes(word));
+      
+      if (hasQuestions && !responseLower.includes("answer") && !responseLower.includes("response")) {
+        issues.push("Response may not fully address questions in prompt");
+        confidence -= 0.1;
+      }
 
       return {
-        isValid: parsed.confidence >= 0.7,
-        confidence: parsed.confidence,
-        issues: parsed.issues || [],
-        suggestions: parsed.suggestions || [],
-        shouldFallback: false,
-        metadata: { type: "completeness" }
+        isValid: confidence >= 0.7,
+        confidence: Math.max(0, confidence),
+        issues,
+        suggestions,
+        shouldFallback: confidence < 0.7,
+        metadata: { type: "completeness", promptWords, responseWords, hasQuestions }
       };
     } catch (error) {
       return {
@@ -290,55 +308,56 @@ Format your response as JSON:
         confidence: 0.5,
         issues: [`Completeness validation failed: ${(error as Error).message}`],
         suggestions: ["Manual review recommended"],
-        shouldFallback: false,
+        shouldFallback: true,
         metadata: { type: "completeness", error: (error as Error).message }
       };
     }
   }
 
   /**
-   * Validate response safety
+   * Validate response safety - simple heuristic-based validation
    */
   private async validateSafety(response: string): Promise<ValidationResult> {
     try {
-      const validationPrompt = `
-Analyze the safety of this AI response.
+      const issues: string[] = [];
+      const suggestions: string[] = [];
+      let confidence = 1.0;
 
-Response: "${response}"
+      // Check for obvious safety issues
+      const safetyKeywords = [
+        "hack", "exploit", "vulnerability", "backdoor", "malware", "virus",
+        "illegal", "unlawful", "harmful", "dangerous", "risky"
+      ];
 
-Evaluate:
-1. Does the response contain harmful, illegal, or inappropriate content?
-2. Are there any security vulnerabilities mentioned?
-3. Does the response promote dangerous activities?
-4. Is the content appropriate for general audiences?
-
-Provide a confidence score (0-1) and list any issues or suggestions.
-Format your response as JSON:
-{
-  "confidence": 0.8,
-  "issues": ["issue1", "issue2"],
-  "suggestions": ["suggestion1", "suggestion2"]
-}
-`;
-
-      // TODO: Implement actual LLM call when LLM API is fixed
-      // const result = await this.llm.complete({ prompt: validationPrompt });
-      // const parsed = JSON.parse(result.text);
+      const responseLower = response.toLowerCase();
+      const hasSafetyIssues = safetyKeywords.some(keyword => responseLower.includes(keyword));
       
-      // Mock response for now
-      const parsed = {
-        confidence: 0.9,
-        issues: [],
-        suggestions: []
-      };
+      if (hasSafetyIssues) {
+        issues.push("Response contains potentially unsafe content");
+        confidence -= 0.3;
+        suggestions.push("Review response for safety concerns");
+      }
+
+      // Check for inappropriate content indicators
+      if (response.includes("***") || response.includes("[REDACTED]") || response.includes("[CENSORED]")) {
+        issues.push("Response contains censored or inappropriate content");
+        confidence -= 0.2;
+      }
+
+      // Check for system manipulation attempts
+      if (responseLower.includes("sudo") || responseLower.includes("rm -rf") || responseLower.includes("format")) {
+        issues.push("Response contains potentially dangerous system commands");
+        confidence -= 0.4;
+        suggestions.push("Avoid executing dangerous system commands");
+      }
 
       return {
-        isValid: parsed.confidence >= 0.7,
-        confidence: parsed.confidence,
-        issues: parsed.issues || [],
-        suggestions: parsed.suggestions || [],
-        shouldFallback: false,
-        metadata: { type: "safety" }
+        isValid: confidence >= 0.7,
+        confidence: Math.max(0, confidence),
+        issues,
+        suggestions,
+        shouldFallback: confidence < 0.7,
+        metadata: { type: "safety", hasSafetyIssues }
       };
     } catch (error) {
       return {
@@ -346,7 +365,7 @@ Format your response as JSON:
         confidence: 0.5,
         issues: [`Safety validation failed: ${(error as Error).message}`],
         suggestions: ["Manual review recommended"],
-        shouldFallback: false,
+        shouldFallback: true,
         metadata: { type: "safety", error: (error as Error).message }
       };
     }
