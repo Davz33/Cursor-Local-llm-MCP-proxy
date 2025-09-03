@@ -134,7 +134,18 @@ const ragTool = {
           const queryEngine = documentIndex.asQueryEngine();
           const response = await queryEngine.query({ query });
           
-          return `Query: ${query}\nResponse: ${response.response}\n\nSource nodes: ${response.sourceNodes?.map(node => node.metadata?.source || 'unknown').join(', ') || 'none'}`;
+          if (!response) {
+            return `Query: ${query}\nResponse: No response received from query engine`;
+          }
+          
+          const sourceNodes = response.sourceNodes || [];
+          const sourceInfo = sourceNodes.length > 0 
+            ? sourceNodes.map(node => node.metadata?.source || 'unknown').join(', ')
+            : 'none';
+          
+          const responseText = response.response || response.text || 'No response text available';
+          
+          return `Query: ${query}\nResponse: ${responseText}\n\nSource nodes: ${sourceInfo}`;
           
         case "list_indexed_documents":
           if (!documentIndex) return "No documents have been indexed yet";
@@ -457,15 +468,29 @@ class LocalLLMProxyServer {
       const queryEngine = documentIndex.asQueryEngine();
       const response = await queryEngine.query({ query });
 
-      const sourceInfo = response.sourceNodes?.map(node => 
-        `Source: ${node.metadata?.source || 'unknown'}`
-      ).join('\n') || 'No sources found';
+      if (!response) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Query: ${query}\n\nResponse: No response received from query engine`,
+            },
+          ],
+        };
+      }
+
+      const sourceNodes = response.sourceNodes || [];
+      const sourceInfo = sourceNodes.length > 0 
+        ? sourceNodes.map(node => `Source: ${node.metadata?.source || 'unknown'}`).join('\n')
+        : 'No sources found';
+
+      const responseText = response.response || response.text || 'No response text available';
 
       return {
         content: [
           {
             type: "text",
-            text: `Query: ${query}\n\nResponse: ${response.response}\n\n${sourceInfo}`,
+            text: `Query: ${query}\n\nResponse: ${responseText}\n\n${sourceInfo}`,
           },
         ],
       };
