@@ -1,6 +1,6 @@
 # Enhanced Local LLM Proxy MCP Server with LlamaIndex.TS
 
-A powerful MCP (Model Context Protocol) server that enhances local LLM capabilities with agentic behavior, RAG (Retrieval-Augmented Generation), and tool integration using LlamaIndex.TS.
+A powerful TypeScript-based MCP (Model Context Protocol) server that enhances local LLM capabilities with agentic behavior, RAG (Retrieval-Augmented Generation), and tool integration using LlamaIndex.TS.
 
 ## 🚀 Features
 
@@ -57,6 +57,11 @@ npm start
 **Development (with hot reload):**
 ```bash
 npm run dev
+```
+
+**Build TypeScript:**
+```bash
+npm run build
 ```
 
 ## 🔧 Configuration
@@ -137,32 +142,38 @@ npm run dev
 ```
 src/
 ├── config/
-│   └── llm-config.js          # LLM and embedding model configuration
+│   └── llm-config.ts          # LLM and embedding model configuration
 ├── rag/
-│   └── rag-service.js         # RAG functionality and document indexing
+│   └── rag-service.ts         # RAG functionality and document indexing
 ├── agentic/
-│   └── agentic-service.js     # Agentic LLM interactions with tools
+│   └── agentic-service.ts     # Agentic LLM interactions with tools
 ├── tools/
-│   └── agentic-tools.js       # Tool definitions (math, filesystem, RAG)
+│   └── agentic-tools.ts       # Tool definitions (math, filesystem, RAG)
 └── mcp/
-    └── mcp-server.js          # MCP server implementation
+    └── mcp-server.ts          # MCP server implementation
 ```
 
 ### Core Components
-- **MCP Server**: Handles Model Context Protocol communication
+- **MCP Server**: TypeScript-based Model Context Protocol communication
 - **LlamaIndex.TS Integration**: Modern v0.11.28 with Settings API
 - **LM Studio Adapter**: OpenAI-compatible API integration
 - **RAG Service**: Document indexing and querying with HuggingFace embeddings
 - **Agentic Service**: Tool-integrated LLM interactions
-- **Modular Tools**: Extensible tool architecture
+- **Modular Tools**: Extensible tool architecture with full type safety
 
 ### Tool Architecture
-```javascript
-const tool = {
+```typescript
+interface Tool {
+  name: string;
+  description: string;
+  execute: (params: any, context?: ToolExecutionContext) => Promise<string>;
+}
+
+const tool: Tool = {
   name: "tool_name",
   description: "Tool description",
-  execute: async (params) => {
-    // Tool implementation
+  execute: async (params, context) => {
+    // Tool implementation with full type safety
   }
 };
 ```

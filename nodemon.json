@@ -1,6 +1,7 @@
 {
-  "watch": ["src/", "index.js"],
-  "ignore": ["node_modules/", "*.test.js", "*.spec.js"],
-  "ext": "js,json",
+  "watch": ["src/", "index.ts"],
+  "ignore": ["node_modules/", "*.test.ts", "*.spec.ts", "dist/"],
+  "ext": "ts,js,json",
+  "exec": "ts-node --esm index.ts",
   "delay": 1000
 }

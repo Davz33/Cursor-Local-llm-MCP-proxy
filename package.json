@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "description": "Enhanced MCP server for local LLM with RAG, agentic capabilities, and tool integration using LlamaIndex.TS",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node index.js",
-    "start:with-validation": "LLM_VALIDATION_ENABLED=true USE_LOCAL_VALIDATOR=true node index.js",
-    "dev": "nodemon index.js",
-    "dev:with-validation": "LLM_VALIDATION_ENABLED=true USE_LOCAL_VALIDATOR=true nodemon index.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "start:with-validation": "LLM_VALIDATION_ENABLED=true USE_LOCAL_VALIDATOR=true node dist/index.js",
+    "dev": "ts-node --esm index.ts",
+    "dev:with-validation": "LLM_VALIDATION_ENABLED=true USE_LOCAL_VALIDATOR=true ts-node --esm index.ts",
+    "dev:watch": "nodemon --exec \"ts-node --esm index.ts\"",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean"
   },
   "dependencies": {
     "@llamaindex/huggingface": "^0.1.28",
@@ -31,6 +35,9 @@
   "author": "Davide Vitiello",
   "license": "MIT",
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "@types/node": "^24.3.0",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
   }
 }

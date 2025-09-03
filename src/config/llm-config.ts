@@ -6,10 +6,15 @@ import { Settings } from "llamaindex";
 const LM_STUDIO_BASE_URL = process.env.LM_STUDIO_BASE_URL || "http://localhost:1234/v1";
 const LM_STUDIO_MODEL = process.env.LM_STUDIO_MODEL || "qwen3-coder-30b-a3b-instruct";
 
+export interface LMStudioConfig {
+  baseURL: string;
+  model: string;
+}
+
 /**
  * Initialize LLM with LM Studio configuration
  */
-export function initializeLLM() {
+export function initializeLLM(): OpenAI {
   return new OpenAI({
     baseURL: LM_STUDIO_BASE_URL,
     model: LM_STUDIO_MODEL,
@@ -21,17 +26,16 @@ export function initializeLLM() {
 /**
  * Initialize embedding model for RAG
  */
-export function initializeEmbeddingModel() {
+export function initializeEmbeddingModel(): HuggingFaceEmbedding {
   return new HuggingFaceEmbedding({
     modelType: "BAAI/bge-small-en-v1.5",
-    quantized: false,
   });
 }
 
 /**
  * Configure global settings with local LLM and embedding model
  */
-export function configureSettings() {
+export function configureSettings(): { llm: OpenAI; embedModel: HuggingFaceEmbedding } {
   console.error("LLM Config: Starting configureSettings");
   
   // Always configure settings to ensure they are properly set
@@ -52,7 +56,7 @@ export function configureSettings() {
 /**
  * Get LM Studio configuration
  */
-export function getLMStudioConfig() {
+export function getLMStudioConfig(): LMStudioConfig {
   return {
     baseURL: LM_STUDIO_BASE_URL,
     model: LM_STUDIO_MODEL,

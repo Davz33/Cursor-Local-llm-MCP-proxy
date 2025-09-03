@@ -1,23 +1,38 @@
-import { Document, VectorStoreIndex, Settings } from "llamaindex";
+import { Document, VectorStoreIndex, Settings, EngineResponse } from "llamaindex";
 import { configureSettings } from "../config/llm-config.js";
 import fs from "fs/promises";
+
+export interface RAGQueryResult {
+  query: string;
+  response: string;
+  sourceNodes: string;
+  fullResponse?: EngineResponse;
+}
+
+export interface IndexStatus {
+  hasIndex: boolean;
+  indexType: string;
+  instanceId: string;
+}
 
 /**
  * RAG Service for document indexing and querying
  */
 export class RAGService {
+  private documentIndex: VectorStoreIndex | null = null;
+  private instanceId: string;
+
   constructor() {
+    // Create unique instance ID for tracking
+    this.instanceId = `RAG_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     try {
-      // Create unique instance ID for tracking
-      this.instanceId = `RAG_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
       // Configure global settings (handles duplicate configuration internally)
       configureSettings();
-      this.documentIndex = null; // Instance-specific document index
       console.error(`RAG Service [${this.instanceId}]: Initialized successfully`);
       console.error(`RAG Service [${this.instanceId}]: Document index initialized as:`, this.documentIndex);
     } catch (error) {
-      console.error(`RAG Service [${this.instanceId}]: Failed to initialize:`, error.message);
+      console.error(`RAG Service [${this.instanceId}]: Failed to initialize:`, (error as Error).message);
       throw error;
     }
   }
@@ -25,9 +40,8 @@ export class RAGService {
   /**
    * Index a document from file path
    */
-  async indexDocument(filePath) {
+  async indexDocument(filePath: string): Promise<string> {
     try {
-      const fs = await import("fs/promises");
       const content = await fs.readFile(filePath, "utf-8");
       
       const document = new Document({ 
@@ -47,14 +61,14 @@ export class RAGService {
       
       return `Successfully indexed document: ${filePath}`;
     } catch (error) {
-      throw new Error(`Failed to index document: ${error.message}`);
+      throw new Error(`Failed to index document: ${(error as Error).message}`);
     }
   }
 
   /**
    * Index text content directly
    */
-  async indexText(text) {
+  async indexText(text: string): Promise<string> {
     try {
       console.error(`RAG Service [${this.instanceId}]: Starting indexText with text length:`, text.length);
       
@@ -79,15 +93,15 @@ export class RAGService {
       console.error("RAG Service: Indexing completed successfully");
       return "Successfully indexed text content";
     } catch (error) {
-      console.error("RAG Service: Error in indexText:", error.message);
-      throw new Error(`Failed to index text: ${error.message}`);
+      console.error("RAG Service: Error in indexText:", (error as Error).message);
+      throw new Error(`Failed to index text: ${(error as Error).message}`);
     }
   }
 
   /**
    * Query indexed documents
    */
-  async queryDocuments(query) {
+  async queryDocuments(query: string): Promise<RAGQueryResult> {
     try {
       const logMsg = `RAG Service [${this.instanceId}]: Starting queryDocuments with query: ${query}\n`;
       await fs.appendFile("rag-debug.log", logMsg).catch(() => {});
@@ -108,7 +122,7 @@ export class RAGService {
       console.error(`RAG Service [${this.instanceId}]: Query engine created successfully`);
       
       console.error(`RAG Service [${this.instanceId}]: About to execute query`);
-      const response = await queryEngine.query({ query });
+      const response: EngineResponse = await queryEngine.query({ query });
       console.error(`RAG Service [${this.instanceId}]: Query executed, response type:`, typeof response);
       console.error(`RAG Service [${this.instanceId}]: Response keys:`, response ? Object.keys(response) : 'null');
       
@@ -126,16 +140,24 @@ export class RAGService {
       
       try {
         // Try different ways to extract response text
-        responseText = response.response || response.message?.content || response.text || "No response text available";
+        if (typeof response.response === 'string') {
+          responseText = response.response;
+        } else if (response.message?.content) {
+          responseText = typeof response.message.content === 'string' 
+            ? response.message.content 
+            : JSON.stringify(response.message.content);
+        } else {
+          responseText = "No response text available";
+        }
         
         // Handle source nodes carefully
         if (response.sourceNodes && Array.isArray(response.sourceNodes) && response.sourceNodes.length > 0) {
           sourceInfo = response.sourceNodes.map(node => {
-            return node?.node?.metadata?.source || node?.metadata?.source || 'unknown';
+            return node?.node?.metadata?.source || 'unknown';
           }).join(', ');
         }
       } catch (parseError) {
-        console.error(`RAG Service [${this.instanceId}]: Error parsing response:`, parseError.message);
+        console.error(`RAG Service [${this.instanceId}]: Error parsing response:`, (parseError as Error).message);
         responseText = "Error parsing response";
       }
       
@@ -148,16 +170,16 @@ export class RAGService {
         fullResponse: response
       };
     } catch (error) {
-      console.error(`RAG Service [${this.instanceId}]: Error in queryDocuments:`, error.message);
-      console.error(`RAG Service [${this.instanceId}]: Error stack:`, error.stack);
-      throw new Error(`RAG query failed: ${error.message}`);
+      console.error(`RAG Service [${this.instanceId}]: Error in queryDocuments:`, (error as Error).message);
+      console.error(`RAG Service [${this.instanceId}]: Error stack:`, (error as Error).stack);
+      throw new Error(`RAG query failed: ${(error as Error).message}`);
     }
   }
 
   /**
    * Check if documents are indexed
    */
-  hasIndexedDocuments() {
+  hasIndexedDocuments(): boolean {
     console.error("RAG Service: Checking if documents are indexed:", this.documentIndex !== null);
     return this.documentIndex !== null;
   }
@@ -165,8 +187,8 @@ export class RAGService {
   /**
    * Get document index status
    */
-  getIndexStatus() {
-    const status = {
+  getIndexStatus(): IndexStatus {
+    const status: IndexStatus = {
       hasIndex: this.documentIndex !== null,
       indexType: this.documentIndex ? "VectorStoreIndex" : "none",
       instanceId: this.instanceId
