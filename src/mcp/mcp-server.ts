@@ -65,7 +65,7 @@ export class LocalLLMProxyServer {
       return {
         tools: [
           {
-            name: "generate_text",
+            name: "generate_text_v2",
             description: "Generate text with optional agentic capabilities and tool integration",
             inputSchema: {
               type: "object",
@@ -194,7 +194,7 @@ export class LocalLLMProxyServer {
         console.error(`MCP Server: Tool args:`, args);
 
         switch (name) {
-          case "generate_text":
+          case "generate_text_v2":
             return await this.handleGenerateText(args as unknown as GenerateTextArgs);
           case "chat_completion":
             return await this.handleChatCompletion(args as unknown as ChatCompletionArgs);
