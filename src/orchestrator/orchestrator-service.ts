@@ -6,6 +6,7 @@ import { ValidationService, ValidationResult } from "./validation-service.js";
 import { RAGService } from "../rag/rag-service.js";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { isWebSearchQuery as checkWebSearchQuery, getMatchingPatterns } from "./web-search-patterns.js";
 
 export interface OrchestratorOptions {
   enableValidation?: boolean;
@@ -296,20 +297,15 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
     const promptLower = prompt.toLowerCase();
 
     // PRIORITY 1: Check for web search/real-time information patterns FIRST
-    const webSearchPatterns = [
-      'recent', 'latest', 'current', 'news', 'today', 'now', '2024', '2025',
-      'what happened', 'what is happening', 'breaking', 'update', 'developments',
-      'events', 'weather', 'market', 'stock', 'price', 'forecast', 'prediction',
-      'trends', 'statistics', 'data', 'information', 'search', 'find', 'look up',
-      'zürich', 'zurich', 'switzerland', 'city', 'location', 'place'
-    ];
-
-    const shouldUseWebSearch = webSearchPatterns.some(pattern => 
-      promptLower.includes(pattern)
-    );
+    const shouldUseWebSearch = checkWebSearchQuery(prompt);
 
     console.error(`Orchestrator: Web search check - prompt: "${promptLower}"`);
     console.error(`Orchestrator: Should use web search (Sonar): ${shouldUseWebSearch}`);
+    
+    if (shouldUseWebSearch) {
+      const matchingPatterns = getMatchingPatterns(prompt);
+      console.error(`Orchestrator: Matching web search patterns: ${matchingPatterns.map(p => `${p.pattern} (${p.priority})`).join(', ')}`);
+    }
 
     // ALWAYS prioritize Sonar for web search queries
     if (shouldUseWebSearch) {
@@ -387,16 +383,7 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
    * Check if a prompt is a web search query
    */
   private isWebSearchQuery(prompt: string): boolean {
-    const promptLower = prompt.toLowerCase();
-    const webSearchPatterns = [
-      'recent', 'latest', 'current', 'news', 'today', 'now', '2024', '2025',
-      'what happened', 'what is happening', 'breaking', 'update', 'developments',
-      'events', 'weather', 'market', 'stock', 'price', 'forecast', 'prediction',
-      'trends', 'statistics', 'data', 'information', 'search', 'find', 'look up',
-      'zürich', 'zurich', 'switzerland', 'city', 'location', 'place'
-    ];
-    
-    return webSearchPatterns.some(pattern => promptLower.includes(pattern));
+    return checkWebSearchQuery(prompt);
   }
 
   /**
