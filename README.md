@@ -185,7 +185,7 @@ The server can be configured using environment variables:
     "max_tokens": 300
   }
 }
-
+```
 
 ## 🧪 Testing
 
