@@ -32,7 +32,7 @@ export class AgenticService {
   private llm: LLM;
   private ragService: RAGService;
   private orchestratorService: OrchestratorService | null = null;
-  private toolCallingService: ToolCallingService | null = null;
+  public toolCallingService: ToolCallingService | null = null;
 
   constructor() {
     // Configure global settings and get LLM instance
