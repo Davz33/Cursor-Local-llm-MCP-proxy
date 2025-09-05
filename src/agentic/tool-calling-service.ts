@@ -62,6 +62,12 @@ export class ToolCallingService {
             ': "$1"$2',
           );
 
+          // Fix unterminated strings (missing closing quotes)
+          fixedParametersStr = fixedParametersStr.replace(
+            /"([^"]*?)(\s*[,}])/g,
+            '"$1"$2',
+          );
+
           const parameters = JSON.parse(fixedParametersStr);
           toolCalls.push({ name: toolName, parameters });
           console.log(`🔧 Parsed tool call: ${toolName}`, parameters);
@@ -73,12 +79,31 @@ export class ToolCallingService {
         // Try to extract basic information even if JSON parsing fails
         try {
           const toolName = match[1];
+          const rawParametersStr = match[2];
           if (toolName) {
             console.log(
               `⚠️ Attempting to create basic tool call for: ${toolName}`,
             );
-            // Create a basic tool call with empty parameters
-            toolCalls.push({ name: toolName, parameters: {} });
+
+            // Try to extract basic parameters from the raw string
+            let basicParams: any = {};
+            if (toolName === "filesystem" && rawParametersStr) {
+              // Extract common filesystem parameters
+              const actionMatch = rawParametersStr.match(
+                /"action":\s*"([^"]*)"/,
+              );
+              const pathMatch = rawParametersStr.match(/"path":\s*"([^"]*)"/);
+              // Handle both properly quoted and unterminated content
+              const contentMatch = rawParametersStr.match(
+                /"content":\s*"([^"]*?)(?:"|$)/,
+              );
+
+              if (actionMatch) basicParams.action = actionMatch[1];
+              if (pathMatch) basicParams.path = pathMatch[1];
+              if (contentMatch) basicParams.content = contentMatch[1];
+            }
+
+            toolCalls.push({ name: toolName, parameters: basicParams });
           }
         } catch (fallbackError) {
           console.error(`Fallback parsing also failed:`, fallbackError);
