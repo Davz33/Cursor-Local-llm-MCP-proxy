@@ -209,16 +209,32 @@ export class AgenticService {
     temperature: number,
   ): Promise<string> {
     try {
-      // TODO: Fix LLM completion API call for LlamaIndex.TS v0.11.28
-      // const response = await this.llm.complete({
-      //   prompt,
-      //   maxTokens,
-      //   temperature
-      // });
+      console.log("🤖 Calling real LLM for response generation...");
 
-      // return response.text || "No response generated";
-      return `LLM Response for: ${prompt} (maxTokens: ${maxTokens}, temperature: ${temperature})`;
+      // Use the chat method for non-streaming responses
+      const response = await this.llm.chat({
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      });
+
+      // Extract the response content
+      if (response && response.message && response.message.content) {
+        const content = response.message.content as string;
+        console.log(
+          "✅ Real LLM response received:",
+          content.substring(0, 100) + "...",
+        );
+        return content;
+      } else {
+        console.log("⚠️ No content in LLM response, using fallback");
+        return `LLM Response for: ${prompt} (maxTokens: ${maxTokens}, temperature: ${temperature})`;
+      }
     } catch (error) {
+      console.error("❌ LLM generation failed:", error);
       throw new Error(`LLM generation failed: ${(error as Error).message}`);
     }
   }

@@ -289,15 +289,40 @@ Please respond with either a direct answer or use the appropriate tool(s) to hel
    * This will be re-enabled when the LLM completion API is properly fixed
    */
   private async callRealLLM(prompt: string): Promise<string | null> {
-    // TODO: Implement real LLM calling when the API is fixed
-    // The current LLM implementation returns async iterables which need
-    // to be handled differently than direct responses
+    try {
+      console.log("🤖 Calling real LLM for tool calling...");
 
-    console.log(
-      "🔧 Real LLM calling is temporarily disabled due to API compatibility issues",
-    );
-    console.log("   Using intelligent simulation instead");
-    return null;
+      // Use the chat method for non-streaming responses
+      const response = await this.llm.chat({
+        messages: [
+          {
+            role: "system",
+            content:
+              'You are a helpful assistant that can use tools. When you need to use a tool, respond with a JSON object in the format: <tool_call>{"name": "tool_name", "parameters": {...}}</tool_call>',
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      });
+
+      // Extract the response content
+      if (response && response.message && response.message.content) {
+        const content = response.message.content as string;
+        console.log(
+          "✅ Real LLM response received:",
+          content.substring(0, 100) + "...",
+        );
+        return content;
+      } else {
+        console.log("⚠️ No content in LLM response");
+        return null;
+      }
+    } catch (error) {
+      console.error("❌ Real LLM calling failed:", error);
+      return null;
+    }
   }
 
   /**
