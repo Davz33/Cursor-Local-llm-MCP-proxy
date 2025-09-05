@@ -40,9 +40,9 @@ export class ToolCallingService {
     const toolCalls: ToolCall[] = [];
 
     // Look for tool call patterns in the response
-    // This is a simplified parser - in practice, you'd want more robust parsing
+    // Support both <tool_call> tags and direct JSON format
     const toolCallRegex =
-      /<tool_call>\s*{\s*"name":\s*"([^"]+)",\s*"parameters":\s*({[^}]+})\s*}/g;
+      /(?:<tool_call>\s*)?{\s*"name":\s*"([^"]+)",\s*"parameters":\s*({[^}]+})\s*}(?:\s*<\/tool_call>)?/g;
     let match;
 
     while ((match = toolCallRegex.exec(response)) !== null) {
@@ -50,11 +50,39 @@ export class ToolCallingService {
         const toolName = match[1];
         const parametersStr = match[2];
         if (toolName && parametersStr) {
-          const parameters = JSON.parse(parametersStr);
+          // Try to fix common JSON issues
+          let fixedParametersStr = parametersStr;
+
+          // Fix missing quotes around property names
+          fixedParametersStr = fixedParametersStr.replace(/(\w+):/g, '"$1":');
+
+          // Fix missing quotes around string values
+          fixedParametersStr = fixedParametersStr.replace(
+            /:\s*([^",{\[\s][^,}]*?)(\s*[,}])/g,
+            ': "$1"$2',
+          );
+
+          const parameters = JSON.parse(fixedParametersStr);
           toolCalls.push({ name: toolName, parameters });
+          console.log(`🔧 Parsed tool call: ${toolName}`, parameters);
         }
       } catch (error) {
         console.error(`Failed to parse tool call: ${match[0]}`, error);
+        console.log(`Raw parameters string: ${match[2]}`);
+
+        // Try to extract basic information even if JSON parsing fails
+        try {
+          const toolName = match[1];
+          if (toolName) {
+            console.log(
+              `⚠️ Attempting to create basic tool call for: ${toolName}`,
+            );
+            // Create a basic tool call with empty parameters
+            toolCalls.push({ name: toolName, parameters: {} });
+          }
+        } catch (fallbackError) {
+          console.error(`Fallback parsing also failed:`, fallbackError);
+        }
       }
     }
 
@@ -298,7 +326,7 @@ Please respond with either a direct answer or use the appropriate tool(s) to hel
           {
             role: "system",
             content:
-              'You are a helpful assistant that can use tools. When you need to use a tool, respond with a JSON object in the format: <tool_call>{"name": "tool_name", "parameters": {...}}</tool_call>',
+              'You are a helpful assistant that can use tools. When you need to use a tool, respond with a JSON object in the format: <tool_call>{"name": "tool_name", "parameters": {"param1": "value1", "param2": "value2"}}</tool_call>\n\nIMPORTANT: The JSON must be valid with proper quotes around all property names and string values. Example for filesystem tool: <tool_call>{"name": "filesystem", "parameters": {"action": "write", "path": "filename.txt", "content": "file content"}}</tool_call>',
           },
           {
             role: "user",
