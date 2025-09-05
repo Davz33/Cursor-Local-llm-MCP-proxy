@@ -1,6 +1,6 @@
 {
   "name": "local-llm-proxy-mcp",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "Enhanced MCP server for local LLM with RAG, agentic capabilities, and tool integration using LlamaIndex.TS",
   "type": "module",
   "main": "dist/index.js",
