@@ -119,3 +119,6 @@ test-*.js
 # RAG storage (contains indexed documents)
 rag-storage/
 
+# Knowledge base (contains chat history and documentation)
+.knowledge/
+
