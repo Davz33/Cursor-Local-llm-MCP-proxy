@@ -17,10 +17,15 @@ export interface Tool {
  */
 export const mathTool: Tool = {
   name: "math",
-  description: "Perform basic mathematical operations (add, subtract, multiply, divide)",
-  execute: async (params: { operation: string; a: number; b: number }): Promise<string> => {
+  description:
+    "Perform basic mathematical operations (add, subtract, multiply, divide)",
+  execute: async (params: {
+    operation: string;
+    a: number;
+    b: number;
+  }): Promise<string> => {
     const { operation, a, b } = params;
-    
+
     switch (operation) {
       case "add":
         return `Result: ${a} + ${b} = ${a + b}`;
@@ -36,7 +41,7 @@ export const mathTool: Tool = {
       default:
         return `Error: Unknown operation '${operation}'. Supported operations: add, subtract, multiply, divide`;
     }
-  }
+  },
 };
 
 /**
@@ -45,33 +50,37 @@ export const mathTool: Tool = {
 export const fileSystemTool: Tool = {
   name: "filesystem",
   description: "Read, write, and list files and directories",
-  execute: async (params: { action: string; path: string; content?: string }): Promise<string> => {
+  execute: async (params: {
+    action: string;
+    path: string;
+    content?: string;
+  }): Promise<string> => {
     const { action, path: filePath, content } = params;
-    
+
     try {
       switch (action) {
         case "read":
           const fileContent = await fs.readFile(filePath, "utf-8");
           return `File content:\n${fileContent}`;
-          
+
         case "write":
           if (!content) {
             return "Error: Content is required for write operation";
           }
           await fs.writeFile(filePath, content, "utf-8");
           return `Successfully wrote content to ${filePath}`;
-          
+
         case "list":
           const items = await fs.readdir(filePath);
           const itemDetails = await Promise.all(
             items.map(async (item) => {
               const itemPath = path.join(filePath, item);
               const stats = await fs.stat(itemPath);
-              return `${item} (${stats.isDirectory() ? 'directory' : 'file'})`;
-            })
+              return `${item} (${stats.isDirectory() ? "directory" : "file"})`;
+            }),
           );
-          return `Directory contents:\n${itemDetails.join('\n')}`;
-          
+          return `Directory contents:\n${itemDetails.join("\n")}`;
+
         case "exists":
           try {
             await fs.access(filePath);
@@ -79,14 +88,14 @@ export const fileSystemTool: Tool = {
           } catch {
             return `Path does not exist: ${filePath}`;
           }
-          
-              default:
-        return `Error: Unknown action '${action}'. Supported actions: read, write, list, exists`;
+
+        default:
+          return `Error: Unknown action '${action}'. Supported actions: read, write, list, exists`;
       }
     } catch (error) {
       return `Error: ${(error as Error).message}`;
     }
-  }
+  },
 };
 
 /**
@@ -94,21 +103,25 @@ export const fileSystemTool: Tool = {
  */
 export const ragTool: Tool = {
   name: "rag",
-  description: "Query indexed documents using RAG (Retrieval-Augmented Generation)",
-  execute: async (params: { query: string }, context?: ToolExecutionContext): Promise<string> => {
+  description:
+    "Query indexed documents using RAG (Retrieval-Augmented Generation)",
+  execute: async (
+    params: { query: string },
+    context?: ToolExecutionContext,
+  ): Promise<string> => {
     const { query } = params;
-    
+
     if (!context?.ragService) {
       return "Error: RAG service not available in context";
     }
-    
+
     try {
       const result = await context.ragService.queryDocuments(query);
       return `Query: ${result.query}\n\nResponse: ${result.response}\n\nSource: ${result.sourceNodes}`;
     } catch (error) {
       return `RAG query error: ${(error as Error).message}`;
     }
-  }
+  },
 };
 
 /**
@@ -129,7 +142,7 @@ export function getAvailableToolsWithContext(ragService: RAGService): Tool[] {
       ...ragTool,
       execute: async (params: { query: string }): Promise<string> => {
         return await ragTool.execute(params, { ragService });
-      }
-    }
+      },
+    },
   ];
 }

@@ -1,11 +1,11 @@
-import fetch from 'node-fetch';
-import { config } from 'dotenv';
+import fetch from "node-fetch";
+import { config } from "dotenv";
 
 // Load environment variables from .env file
 config();
 
 export interface SonarMessage {
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   content: string;
 }
 
@@ -73,17 +73,21 @@ export interface SonarError {
  */
 export class SonarService {
   private apiKey: string;
-  private baseUrl: string = 'https://api.perplexity.ai/chat/completions';
+  private baseUrl: string = "https://api.perplexity.ai/chat/completions";
 
   constructor(apiKey?: string) {
     // Try multiple possible environment variable names
-    this.apiKey = apiKey || 
-                  process.env.PERPLEXITY_API_KEY || 
-                  process.env.SONAR_API_KEY || 
-                  process.env.PERPLEXITY_SONAR_API_KEY || '';
-    
+    this.apiKey =
+      apiKey ||
+      process.env.PERPLEXITY_API_KEY ||
+      process.env.SONAR_API_KEY ||
+      process.env.PERPLEXITY_SONAR_API_KEY ||
+      "";
+
     if (!this.apiKey) {
-      throw new Error('Perplexity API key is required. Set PERPLEXITY_API_KEY, SONAR_API_KEY, or PERPLEXITY_SONAR_API_KEY environment variable in .env file.');
+      throw new Error(
+        "Perplexity API key is required. Set PERPLEXITY_API_KEY, SONAR_API_KEY, or PERPLEXITY_SONAR_API_KEY environment variable in .env file.",
+      );
     }
   }
 
@@ -97,51 +101,51 @@ export class SonarService {
       max_tokens?: number;
       temperature?: number;
       stream?: boolean;
-    } = {}
+    } = {},
   ): Promise<SonarResponse> {
     const {
-      model = 'sonar-pro',
+      model = "sonar-pro",
       max_tokens = 1000,
       temperature = 0.7,
-      stream = false
+      stream = false,
     } = options;
 
     const requestBody: SonarRequest = {
       model,
       messages: [
         {
-          role: 'user',
-          content: prompt
-        }
+          role: "user",
+          content: prompt,
+        },
       ],
       max_tokens,
       temperature,
-      stream
+      stream,
     };
 
     try {
       const response = await fetch(this.baseUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'accept': 'application/json',
-          'content-type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
+          accept: "application/json",
+          "content-type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        const errorData = await response.json() as SonarError;
+        const errorData = (await response.json()) as SonarError;
         throw new Error(`Sonar API error: ${errorData.error.message}`);
       }
 
-      const data = await response.json() as SonarResponse;
+      const data = (await response.json()) as SonarResponse;
       return data;
     } catch (error) {
       if (error instanceof Error) {
         throw new Error(`Failed to query Sonar API: ${error.message}`);
       }
-      throw new Error('Failed to query Sonar API: Unknown error');
+      throw new Error("Failed to query Sonar API: Unknown error");
     }
   }
 
@@ -153,7 +157,7 @@ export class SonarService {
     options: {
       max_tokens?: number;
       temperature?: number;
-    } = {}
+    } = {},
   ): Promise<{
     content: string;
     citations: string[];
@@ -161,12 +165,12 @@ export class SonarService {
     usage: SonarUsage;
   }> {
     const response = await this.query(topic, options);
-    
+
     return {
-      content: response.choices[0]?.message?.content || '',
+      content: response.choices[0]?.message?.content || "",
       citations: response.citations,
       searchResults: response.search_results,
-      usage: response.usage
+      usage: response.usage,
     };
   }
 
@@ -178,7 +182,7 @@ export class SonarService {
     options: {
       max_tokens?: number;
       temperature?: number;
-    } = {}
+    } = {},
   ): Promise<{
     answer: string;
     sources: Array<{
@@ -189,17 +193,17 @@ export class SonarService {
     cost: number;
   }> {
     const result = await this.getRealTimeInfo(query, options);
-    
-    const sources = result.searchResults.map(result => ({
+
+    const sources = result.searchResults.map((result) => ({
       title: result.title,
       url: result.url,
-      snippet: result.snippet
+      snippet: result.snippet,
     }));
 
     return {
       answer: result.content,
       sources,
-      cost: result.usage.cost.total_cost
+      cost: result.usage.cost.total_cost,
     };
   }
 
@@ -215,10 +219,10 @@ export class SonarService {
    */
   getAvailableModels(): string[] {
     return [
-      'sonar-pro',
-      'sonar-online',
-      'sonar-medium-online',
-      'sonar-small-online'
+      "sonar-pro",
+      "sonar-online",
+      "sonar-medium-online",
+      "sonar-small-online",
     ];
   }
 }

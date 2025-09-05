@@ -3,8 +3,10 @@ import { HuggingFaceEmbedding } from "@llamaindex/huggingface";
 import { Settings } from "llamaindex";
 
 // LM Studio Configuration
-const LM_STUDIO_BASE_URL = process.env.LM_STUDIO_BASE_URL || "http://localhost:1234/v1";
-const LM_STUDIO_MODEL = process.env.LM_STUDIO_MODEL || "qwen3-coder-30b-a3b-instruct";
+const LM_STUDIO_BASE_URL =
+  process.env.LM_STUDIO_BASE_URL || "http://localhost:1234/v1";
+const LM_STUDIO_MODEL =
+  process.env.LM_STUDIO_MODEL || "qwen3-coder-30b-a3b-instruct";
 
 export interface LMStudioConfig {
   baseURL: string;
@@ -35,21 +37,27 @@ export function initializeEmbeddingModel(): HuggingFaceEmbedding {
 /**
  * Configure global settings with local LLM and embedding model
  */
-export function configureSettings(): { llm: OpenAI; embedModel: HuggingFaceEmbedding } {
+export function configureSettings(): {
+  llm: OpenAI;
+  embedModel: HuggingFaceEmbedding;
+} {
   console.error("LLM Config: Starting configureSettings");
-  
+
   // Always configure settings to ensure they are properly set
   const llm = initializeLLM();
   const embedModel = initializeEmbeddingModel();
-  
+
   // Configure global settings (modern API)
   Settings.llm = llm;
   Settings.embedModel = embedModel;
-  
+
   console.error("LLM Config: Settings configured with LLM and EmbedModel");
   console.error("LLM Config: Settings.llm after setting:", !!Settings.llm);
-  console.error("LLM Config: Settings.embedModel after setting:", !!Settings.embedModel);
-  
+  console.error(
+    "LLM Config: Settings.embedModel after setting:",
+    !!Settings.embedModel,
+  );
+
   return { llm, embedModel };
 }
 

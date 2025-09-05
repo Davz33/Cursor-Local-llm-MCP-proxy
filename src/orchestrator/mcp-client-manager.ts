@@ -35,7 +35,8 @@ export class MCPClientManager {
    */
   async connectToServer(serverName: string): Promise<boolean> {
     try {
-      const discoveredServer = this.discoveryService.getDiscoveredServer(serverName);
+      const discoveredServer =
+        this.discoveryService.getDiscoveredServer(serverName);
       if (!discoveredServer) {
         throw new Error(`Server ${serverName} not found in discovered servers`);
       }
@@ -45,12 +46,12 @@ export class MCPClientManager {
       // Create MCP client transport (handles process spawning)
       const transport = new StdioClientTransport({
         command: discoveredServer.config.command,
-        args: discoveredServer.config.args || []
+        args: discoveredServer.config.args || [],
       });
 
       const client = new Client({
         name: "local-llm-proxy-orchestrator",
-        version: "1.0.0"
+        version: "1.0.0",
       });
 
       // Connect the client
@@ -58,11 +59,11 @@ export class MCPClientManager {
 
       // List available tools
       const toolsResponse = await client.listTools();
-      const tools: MCPTool[] = toolsResponse.tools.map(tool => ({
+      const tools: MCPTool[] = toolsResponse.tools.map((tool) => ({
         name: tool.name,
         description: tool.description || "No description available",
         inputSchema: tool.inputSchema,
-        serverName
+        serverName,
       }));
 
       // Create connection object
@@ -71,18 +72,27 @@ export class MCPClientManager {
         client,
         process: null as any, // Transport handles process management
         tools,
-        isConnected: true
+        isConnected: true,
       };
 
       this.connections.set(serverName, connection);
       this.discoveryService.updateServerStatus(serverName, "connected");
 
-      console.error(`MCP Client Manager: Successfully connected to ${serverName} with ${tools.length} tools`);
+      console.error(
+        `MCP Client Manager: Successfully connected to ${serverName} with ${tools.length} tools`,
+      );
 
       return true;
     } catch (error) {
-      console.error(`MCP Client Manager: Failed to connect to ${serverName}:`, (error as Error).message);
-      this.discoveryService.updateServerStatus(serverName, "error", (error as Error).message);
+      console.error(
+        `MCP Client Manager: Failed to connect to ${serverName}:`,
+        (error as Error).message,
+      );
+      this.discoveryService.updateServerStatus(
+        serverName,
+        "error",
+        (error as Error).message,
+      );
       return false;
     }
   }
@@ -103,7 +113,10 @@ export class MCPClientManager {
       this.discoveryService.updateServerStatus(serverName, "discovered");
       return true;
     } catch (error) {
-      console.error(`MCP Client Manager: Error disconnecting from ${serverName}:`, (error as Error).message);
+      console.error(
+        `MCP Client Manager: Error disconnecting from ${serverName}:`,
+        (error as Error).message,
+      );
       return false;
     }
   }
@@ -132,7 +145,11 @@ export class MCPClientManager {
   /**
    * Call a tool on a specific server
    */
-  async callTool(serverName: string, toolName: string, args: any): Promise<any> {
+  async callTool(
+    serverName: string,
+    toolName: string,
+    args: any,
+  ): Promise<any> {
     const connection = this.connections.get(serverName);
     if (!connection || !connection.isConnected) {
       throw new Error(`Server ${serverName} is not connected`);
@@ -142,16 +159,21 @@ export class MCPClientManager {
       // Log orchestrator tool calls
       console.error(`🎯 ORCHESTRATOR TOOL CALL: ${serverName}.${toolName}`);
       console.error(`🎯 ORCHESTRATOR ARGS:`, JSON.stringify(args, null, 2));
-      
+
       const result = await connection.client.callTool({
         name: toolName,
-        arguments: args
+        arguments: args,
       });
 
-      console.error(`🎯 ORCHESTRATOR RESULT: ${serverName}.${toolName} completed successfully`);
+      console.error(
+        `🎯 ORCHESTRATOR RESULT: ${serverName}.${toolName} completed successfully`,
+      );
       return result;
     } catch (error) {
-      console.error(`❌ ORCHESTRATOR ERROR: ${serverName}.${toolName} failed:`, (error as Error).message);
+      console.error(
+        `❌ ORCHESTRATOR ERROR: ${serverName}.${toolName} failed:`,
+        (error as Error).message,
+      );
       throw error;
     }
   }
@@ -159,17 +181,20 @@ export class MCPClientManager {
   /**
    * Get connection status for all servers
    */
-  getConnectionStatus(): Record<string, {
-    isConnected: boolean;
-    toolCount: number;
-    lastError?: string;
-  }> {
+  getConnectionStatus(): Record<
+    string,
+    {
+      isConnected: boolean;
+      toolCount: number;
+      lastError?: string;
+    }
+  > {
     const status: Record<string, any> = {};
     for (const [serverName, connection] of this.connections.entries()) {
       status[serverName] = {
         isConnected: connection.isConnected,
         toolCount: connection.tools.length,
-        lastError: connection.lastError
+        lastError: connection.lastError,
       };
     }
     return status;
@@ -215,7 +240,10 @@ export class MCPClientManager {
    */
   getServerByToolName(toolName: string): string | undefined {
     for (const [serverName, connection] of this.connections.entries()) {
-      if (connection.isConnected && connection.tools.some(tool => tool.name === toolName)) {
+      if (
+        connection.isConnected &&
+        connection.tools.some((tool) => tool.name === toolName)
+      ) {
         return serverName;
       }
     }

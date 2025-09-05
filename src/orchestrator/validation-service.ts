@@ -29,7 +29,7 @@ export class ValidationService {
       minConfidence: 0.7,
       maxIssues: 3,
       enableFallback: true,
-      customValidators: []
+      customValidators: [],
     };
   }
 
@@ -40,37 +40,33 @@ export class ValidationService {
     prompt: string,
     response: string,
     context: Record<string, any> = {},
-    options: ValidationOptions = {}
+    options: ValidationOptions = {},
   ): Promise<ValidationResult> {
     const opts = { ...this.defaultOptions, ...options };
-    
+
     try {
       // Run multiple validation checks
-      const [
-        coherenceCheck,
-        accuracyCheck,
-        completenessCheck,
-        safetyCheck
-      ] = await Promise.all([
-        this.validateCoherence(prompt, response),
-        this.validateAccuracy(prompt, response, context),
-        this.validateCompleteness(prompt, response),
-        this.validateSafety(response)
-      ]);
+      const [coherenceCheck, accuracyCheck, completenessCheck, safetyCheck] =
+        await Promise.all([
+          this.validateCoherence(prompt, response),
+          this.validateAccuracy(prompt, response, context),
+          this.validateCompleteness(prompt, response),
+          this.validateSafety(response),
+        ]);
 
       // Combine results
       const allIssues = [
         ...coherenceCheck.issues,
         ...accuracyCheck.issues,
         ...completenessCheck.issues,
-        ...safetyCheck.issues
+        ...safetyCheck.issues,
       ];
 
       const allSuggestions = [
         ...coherenceCheck.suggestions,
         ...accuracyCheck.suggestions,
         ...completenessCheck.suggestions,
-        ...safetyCheck.suggestions
+        ...safetyCheck.suggestions,
       ];
 
       // Calculate overall confidence
@@ -78,27 +74,39 @@ export class ValidationService {
         coherenceCheck.confidence,
         accuracyCheck.confidence,
         completenessCheck.confidence,
-        safetyCheck.confidence
+        safetyCheck.confidence,
       ]);
 
       // Determine if fallback is needed
-      const shouldFallback = (opts.enableFallback ?? true) && (
-        confidence < (opts.minConfidence ?? 0.7) ||
-        allIssues.length > (opts.maxIssues ?? 3) ||
-        safetyCheck.issues.length > 0
-      );
+      const shouldFallback =
+        (opts.enableFallback ?? true) &&
+        (confidence < (opts.minConfidence ?? 0.7) ||
+          allIssues.length > (opts.maxIssues ?? 3) ||
+          safetyCheck.issues.length > 0);
 
       // Log validation results for fallback system
       if (shouldFallback) {
-        console.error(`⚠️ VALIDATION WARNING: Response quality below threshold`);
-        console.error(`⚠️ VALIDATION WARNING: Confidence: ${confidence.toFixed(2)} (min: ${opts.minConfidence ?? 0.7})`);
-        console.error(`⚠️ VALIDATION WARNING: Issues count: ${allIssues.length} (max: ${opts.maxIssues ?? 3})`);
-        console.error(`⚠️ VALIDATION WARNING: Safety issues: ${safetyCheck.issues.length}`);
-        console.error(`⚠️ VALIDATION WARNING: Requesting fallback assistance for response quality improvement`);
+        console.error(
+          `⚠️ VALIDATION WARNING: Response quality below threshold`,
+        );
+        console.error(
+          `⚠️ VALIDATION WARNING: Confidence: ${confidence.toFixed(2)} (min: ${opts.minConfidence ?? 0.7})`,
+        );
+        console.error(
+          `⚠️ VALIDATION WARNING: Issues count: ${allIssues.length} (max: ${opts.maxIssues ?? 3})`,
+        );
+        console.error(
+          `⚠️ VALIDATION WARNING: Safety issues: ${safetyCheck.issues.length}`,
+        );
+        console.error(
+          `⚠️ VALIDATION WARNING: Requesting fallback assistance for response quality improvement`,
+        );
       }
 
       return {
-        isValid: confidence >= (opts.minConfidence ?? 0.7) && allIssues.length <= (opts.maxIssues ?? 3),
+        isValid:
+          confidence >= (opts.minConfidence ?? 0.7) &&
+          allIssues.length <= (opts.maxIssues ?? 3),
         confidence,
         issues: allIssues,
         suggestions: allSuggestions,
@@ -108,19 +116,22 @@ export class ValidationService {
           accuracy: accuracyCheck,
           completeness: completenessCheck,
           safety: safetyCheck,
-          validationOptions: opts
-        }
+          validationOptions: opts,
+        },
       };
     } catch (error) {
-      console.error("Validation Service: Error during validation:", (error as Error).message);
-      
+      console.error(
+        "Validation Service: Error during validation:",
+        (error as Error).message,
+      );
+
       return {
         isValid: false,
         confidence: 0,
         issues: [`Validation error: ${(error as Error).message}`],
         suggestions: ["Retry with different parameters or fallback to cursor"],
         shouldFallback: opts.enableFallback ?? true,
-        metadata: { error: (error as Error).message }
+        metadata: { error: (error as Error).message },
       };
     }
   }
@@ -128,14 +139,21 @@ export class ValidationService {
   /**
    * Validate response coherence - simple heuristic-based validation
    */
-  private async validateCoherence(prompt: string, response: string): Promise<ValidationResult> {
+  private async validateCoherence(
+    prompt: string,
+    response: string,
+  ): Promise<ValidationResult> {
     try {
       const issues: string[] = [];
       const suggestions: string[] = [];
       let confidence = 1.0;
 
       // Check for error indicators
-      if (response.includes("Error:") || response.includes("Failed:") || response.includes("❌")) {
+      if (
+        response.includes("Error:") ||
+        response.includes("Failed:") ||
+        response.includes("❌")
+      ) {
         issues.push("Response contains error indicators");
         confidence -= 0.4;
       }
@@ -153,14 +171,18 @@ export class ValidationService {
         /I cannot locate/i,
         /I don't know how to/i,
         /I'm not sure how to/i,
-        /I don't have the ability to/i
+        /I don't have the ability to/i,
       ];
 
-      const hasInability = inabilityPatterns.some(pattern => pattern.test(response));
+      const hasInability = inabilityPatterns.some((pattern) =>
+        pattern.test(response),
+      );
       if (hasInability) {
         issues.push("Response expresses inability to perform requested action");
         confidence -= 0.3;
-        suggestions.push("Consider using fallback system for better capability");
+        suggestions.push(
+          "Consider using fallback system for better capability",
+        );
       }
 
       // Check if response is too short (less than 50 characters for most requests)
@@ -182,7 +204,11 @@ export class ValidationService {
         issues,
         suggestions,
         shouldFallback: confidence < 0.7,
-        metadata: { type: "coherence", hasInability, responseLength: response.length }
+        metadata: {
+          type: "coherence",
+          hasInability,
+          responseLength: response.length,
+        },
       };
     } catch (error) {
       return {
@@ -191,7 +217,7 @@ export class ValidationService {
         issues: [`Coherence validation failed: ${(error as Error).message}`],
         suggestions: ["Manual review recommended"],
         shouldFallback: true,
-        metadata: { type: "coherence", error: (error as Error).message }
+        metadata: { type: "coherence", error: (error as Error).message },
       };
     }
   }
@@ -202,7 +228,7 @@ export class ValidationService {
   private async validateAccuracy(
     prompt: string,
     response: string,
-    context: Record<string, any>
+    context: Record<string, any>,
   ): Promise<ValidationResult> {
     try {
       const issues: string[] = [];
@@ -210,7 +236,10 @@ export class ValidationService {
       let confidence = 1.0;
 
       // Check for obvious inaccuracies or contradictions
-      if (response.includes("I don't know") || response.includes("I'm not sure")) {
+      if (
+        response.includes("I don't know") ||
+        response.includes("I'm not sure")
+      ) {
         issues.push("Response contains uncertainty about facts");
         confidence -= 0.2;
       }
@@ -219,10 +248,10 @@ export class ValidationService {
       if (context && Object.keys(context).length > 0) {
         // Simple check: if context has specific data but response doesn't reference it
         const contextKeys = Object.keys(context);
-        const hasContextReference = contextKeys.some(key => 
-          response.toLowerCase().includes(key.toLowerCase())
+        const hasContextReference = contextKeys.some((key) =>
+          response.toLowerCase().includes(key.toLowerCase()),
         );
-        
+
         if (!hasContextReference && contextKeys.length > 0) {
           issues.push("Response doesn't reference provided context");
           confidence -= 0.1;
@@ -230,7 +259,11 @@ export class ValidationService {
       }
 
       // Check for placeholder or template responses
-      if (response.includes("[PLACEHOLDER]") || response.includes("TODO") || response.includes("FIXME")) {
+      if (
+        response.includes("[PLACEHOLDER]") ||
+        response.includes("TODO") ||
+        response.includes("FIXME")
+      ) {
         issues.push("Response contains placeholder or incomplete content");
         confidence -= 0.3;
       }
@@ -241,7 +274,10 @@ export class ValidationService {
         issues,
         suggestions,
         shouldFallback: confidence < 0.7,
-        metadata: { type: "accuracy", hasContextReference: context && Object.keys(context).length > 0 }
+        metadata: {
+          type: "accuracy",
+          hasContextReference: context && Object.keys(context).length > 0,
+        },
       };
     } catch (error) {
       return {
@@ -250,7 +286,7 @@ export class ValidationService {
         issues: [`Accuracy validation failed: ${(error as Error).message}`],
         suggestions: ["Manual review recommended"],
         shouldFallback: true,
-        metadata: { type: "accuracy", error: (error as Error).message }
+        metadata: { type: "accuracy", error: (error as Error).message },
       };
     }
   }
@@ -258,7 +294,10 @@ export class ValidationService {
   /**
    * Validate response completeness - simple heuristic-based validation
    */
-  private async validateCompleteness(prompt: string, response: string): Promise<ValidationResult> {
+  private async validateCompleteness(
+    prompt: string,
+    response: string,
+  ): Promise<ValidationResult> {
     try {
       const issues: string[] = [];
       const suggestions: string[] = [];
@@ -267,7 +306,7 @@ export class ValidationService {
       // Check if response is too short for the prompt complexity
       const promptWords = prompt.split(/\s+/).length;
       const responseWords = response.split(/\s+/).length;
-      
+
       // If prompt is complex (many words) but response is very short
       if (promptWords > 20 && responseWords < 30) {
         issues.push("Response is too short for a complex prompt");
@@ -276,7 +315,11 @@ export class ValidationService {
       }
 
       // Check for incomplete sentences or cut-off responses
-      if (response.endsWith("...") || response.endsWith("etc.") || response.endsWith("and so on")) {
+      if (
+        response.endsWith("...") ||
+        response.endsWith("etc.") ||
+        response.endsWith("and so on")
+      ) {
         issues.push("Response appears to be cut off or incomplete");
         confidence -= 0.2;
       }
@@ -284,12 +327,26 @@ export class ValidationService {
       // Check if response addresses key prompt elements
       const promptLower = prompt.toLowerCase();
       const responseLower = response.toLowerCase();
-      
+
       // Look for question words in prompt
-      const questionWords = ["what", "how", "why", "when", "where", "which", "who"];
-      const hasQuestions = questionWords.some(word => promptLower.includes(word));
-      
-      if (hasQuestions && !responseLower.includes("answer") && !responseLower.includes("response")) {
+      const questionWords = [
+        "what",
+        "how",
+        "why",
+        "when",
+        "where",
+        "which",
+        "who",
+      ];
+      const hasQuestions = questionWords.some((word) =>
+        promptLower.includes(word),
+      );
+
+      if (
+        hasQuestions &&
+        !responseLower.includes("answer") &&
+        !responseLower.includes("response")
+      ) {
         issues.push("Response may not fully address questions in prompt");
         confidence -= 0.1;
       }
@@ -300,7 +357,12 @@ export class ValidationService {
         issues,
         suggestions,
         shouldFallback: confidence < 0.7,
-        metadata: { type: "completeness", promptWords, responseWords, hasQuestions }
+        metadata: {
+          type: "completeness",
+          promptWords,
+          responseWords,
+          hasQuestions,
+        },
       };
     } catch (error) {
       return {
@@ -309,7 +371,7 @@ export class ValidationService {
         issues: [`Completeness validation failed: ${(error as Error).message}`],
         suggestions: ["Manual review recommended"],
         shouldFallback: true,
-        metadata: { type: "completeness", error: (error as Error).message }
+        metadata: { type: "completeness", error: (error as Error).message },
       };
     }
   }
@@ -325,13 +387,24 @@ export class ValidationService {
 
       // Check for obvious safety issues
       const safetyKeywords = [
-        "hack", "exploit", "vulnerability", "backdoor", "malware", "virus",
-        "illegal", "unlawful", "harmful", "dangerous", "risky"
+        "hack",
+        "exploit",
+        "vulnerability",
+        "backdoor",
+        "malware",
+        "virus",
+        "illegal",
+        "unlawful",
+        "harmful",
+        "dangerous",
+        "risky",
       ];
 
       const responseLower = response.toLowerCase();
-      const hasSafetyIssues = safetyKeywords.some(keyword => responseLower.includes(keyword));
-      
+      const hasSafetyIssues = safetyKeywords.some((keyword) =>
+        responseLower.includes(keyword),
+      );
+
       if (hasSafetyIssues) {
         issues.push("Response contains potentially unsafe content");
         confidence -= 0.3;
@@ -339,13 +412,21 @@ export class ValidationService {
       }
 
       // Check for inappropriate content indicators
-      if (response.includes("***") || response.includes("[REDACTED]") || response.includes("[CENSORED]")) {
+      if (
+        response.includes("***") ||
+        response.includes("[REDACTED]") ||
+        response.includes("[CENSORED]")
+      ) {
         issues.push("Response contains censored or inappropriate content");
         confidence -= 0.2;
       }
 
       // Check for system manipulation attempts
-      if (responseLower.includes("sudo") || responseLower.includes("rm -rf") || responseLower.includes("format")) {
+      if (
+        responseLower.includes("sudo") ||
+        responseLower.includes("rm -rf") ||
+        responseLower.includes("format")
+      ) {
         issues.push("Response contains potentially dangerous system commands");
         confidence -= 0.4;
         suggestions.push("Avoid executing dangerous system commands");
@@ -357,7 +438,7 @@ export class ValidationService {
         issues,
         suggestions,
         shouldFallback: confidence < 0.7,
-        metadata: { type: "safety", hasSafetyIssues }
+        metadata: { type: "safety", hasSafetyIssues },
       };
     } catch (error) {
       return {
@@ -366,7 +447,7 @@ export class ValidationService {
         issues: [`Safety validation failed: ${(error as Error).message}`],
         suggestions: ["Manual review recommended"],
         shouldFallback: true,
-        metadata: { type: "safety", error: (error as Error).message }
+        metadata: { type: "safety", error: (error as Error).message },
       };
     }
   }
@@ -376,13 +457,13 @@ export class ValidationService {
    */
   private calculateOverallConfidence(confidences: number[]): number {
     if (confidences.length === 0) return 0;
-    
+
     // Weighted average with safety having higher weight
     const weights = [0.2, 0.3, 0.2, 0.3]; // coherence, accuracy, completeness, safety
     const weightedSum = confidences.reduce((sum, conf, index) => {
-      return sum + (conf * (weights[index] || 0.25));
+      return sum + conf * (weights[index] || 0.25);
     }, 0);
-    
+
     return Math.min(1, Math.max(0, weightedSum));
   }
 
@@ -393,8 +474,9 @@ export class ValidationService {
     // Simple heuristics for quick validation
     if (!response || response.trim().length === 0) return false;
     if (response.length < 10) return false;
-    if (response.includes("Error:") || response.includes("Failed:")) return false;
-    
+    if (response.includes("Error:") || response.includes("Failed:"))
+      return false;
+
     return true;
   }
 
@@ -410,7 +492,7 @@ export class ValidationService {
     return {
       totalValidations: 0,
       averageConfidence: 0,
-      fallbackRate: 0
+      fallbackRate: 0,
     };
   }
 }

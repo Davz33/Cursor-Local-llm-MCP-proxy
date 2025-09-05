@@ -45,37 +45,46 @@ export class MCPDiscoveryService {
    */
   async discoverMCPServers(): Promise<DiscoveredMCPServer[]> {
     try {
-      console.error("MCP Discovery: Looking for cursor config at:", this.cursorConfigPath);
-      
+      console.error(
+        "MCP Discovery: Looking for cursor config at:",
+        this.cursorConfigPath,
+      );
+
       // Check if cursor config exists
       await access(this.cursorConfigPath);
-      
+
       // Read and parse the configuration
       const configContent = await readFile(this.cursorConfigPath, "utf-8");
       const config: MCPConfig = JSON.parse(configContent);
-      
-      console.error("MCP Discovery: Found config with servers:", Object.keys(config.mcpServers || {}));
-      
+
+      console.error(
+        "MCP Discovery: Found config with servers:",
+        Object.keys(config.mcpServers || {}),
+      );
+
       // Convert to discovered servers
       const servers: DiscoveredMCPServer[] = [];
-      
+
       if (config.mcpServers) {
         for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
           const discoveredServer: DiscoveredMCPServer = {
             name,
             config: serverConfig,
-            status: "discovered"
+            status: "discovered",
           };
-          
+
           servers.push(discoveredServer);
           this.discoveredServers.set(name, discoveredServer);
         }
       }
-      
+
       return servers;
     } catch (error) {
-      console.error("MCP Discovery: Error discovering servers:", (error as Error).message);
-      
+      console.error(
+        "MCP Discovery: Error discovering servers:",
+        (error as Error).message,
+      );
+
       // Return empty array if config doesn't exist or is invalid
       return [];
     }
@@ -98,7 +107,11 @@ export class MCPDiscoveryService {
   /**
    * Update server status
    */
-  updateServerStatus(name: string, status: DiscoveredMCPServer["status"], error?: string): void {
+  updateServerStatus(
+    name: string,
+    status: DiscoveredMCPServer["status"],
+    error?: string,
+  ): void {
     const server = this.discoveredServers.get(name);
     if (server) {
       server.status = status;
@@ -135,7 +148,7 @@ export class MCPDiscoveryService {
       join(process.cwd(), "mcp.json"),
       join(process.cwd(), ".cursor", "mcp.json"),
       join(homedir(), ".config", "cursor", "mcp.json"),
-      join(homedir(), "Library", "Application Support", "Cursor", "mcp.json") // macOS
+      join(homedir(), "Library", "Application Support", "Cursor", "mcp.json"), // macOS
     ];
 
     for (const path of alternativePaths) {
@@ -166,9 +179,9 @@ export class MCPDiscoveryService {
     return {
       hasConfig: servers.length > 0,
       configPath: this.cursorConfigPath,
-      discoveredCount: servers.filter(s => s.status === "discovered").length,
-      connectedCount: servers.filter(s => s.status === "connected").length,
-      errorCount: servers.filter(s => s.status === "error").length
+      discoveredCount: servers.filter((s) => s.status === "discovered").length,
+      connectedCount: servers.filter((s) => s.status === "connected").length,
+      errorCount: servers.filter((s) => s.status === "error").length,
     };
   }
 }

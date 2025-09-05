@@ -7,7 +7,7 @@ import {
 import { AgenticService } from "../agentic/agentic-service.js";
 import { RAGService } from "../rag/rag-service.js";
 import { SonarService } from "../services/sonar-service.js";
-import { config } from 'dotenv';
+import { config } from "dotenv";
 
 // Load environment variables from .env file
 config();
@@ -61,25 +61,26 @@ export class LocalLLMProxyServer {
   private sonarService: SonarService;
 
   constructor() {
-    this.server = new Server(
-      {
-        name: "local-llm-proxy-mcp",
-        version: "1.0.0",
-      }
-    );
+    this.server = new Server({
+      name: "local-llm-proxy-mcp",
+      version: "1.0.0",
+    });
 
     this.agenticService = new AgenticService();
     this.ragService = this.agenticService.getRAGService();
-    
+
     // Initialize Sonar service (will throw error if API key is missing)
     try {
       this.sonarService = new SonarService();
     } catch (error) {
-      console.error("Sonar service initialization failed:", (error as Error).message);
+      console.error(
+        "Sonar service initialization failed:",
+        (error as Error).message,
+      );
       // Create a placeholder service that will show error when used
       this.sonarService = null as any;
     }
-    
+
     this.setupHandlers();
   }
 
@@ -97,7 +98,8 @@ export class LocalLLMProxyServer {
         tools: [
           {
             name: "generate_text_v2",
-            description: "Generate text with optional agentic capabilities and tool integration",
+            description:
+              "Generate text with optional agentic capabilities and tool integration",
             inputSchema: {
               type: "object",
               properties: {
@@ -131,7 +133,8 @@ export class LocalLLMProxyServer {
           },
           {
             name: "chat_completion",
-            description: "Chat completion with optional agentic capabilities and tool integration",
+            description:
+              "Chat completion with optional agentic capabilities and tool integration",
             inputSchema: {
               type: "object",
               properties: {
@@ -141,7 +144,10 @@ export class LocalLLMProxyServer {
                   items: {
                     type: "object",
                     properties: {
-                      role: { type: "string", enum: ["user", "assistant", "system"] },
+                      role: {
+                        type: "string",
+                        enum: ["user", "assistant", "system"],
+                      },
                       content: { type: "string" },
                     },
                     required: ["role", "content"],
@@ -173,7 +179,8 @@ export class LocalLLMProxyServer {
           },
           {
             name: "rag_query",
-            description: "Query indexed documents using RAG (Retrieval-Augmented Generation)",
+            description:
+              "Query indexed documents using RAG (Retrieval-Augmented Generation)",
             inputSchema: {
               type: "object",
               properties: {
@@ -246,13 +253,15 @@ export class LocalLLMProxyServer {
           },
           {
             name: "discover_mcp_servers",
-            description: "Discover and connect to MCP servers from cursor configuration",
+            description:
+              "Discover and connect to MCP servers from cursor configuration",
             inputSchema: {
               type: "object",
               properties: {
                 auto_connect: {
                   type: "boolean",
-                  description: "Whether to automatically connect to discovered servers",
+                  description:
+                    "Whether to automatically connect to discovered servers",
                   default: true,
                 },
               },
@@ -260,7 +269,8 @@ export class LocalLLMProxyServer {
           },
           {
             name: "list_orchestrated_tools",
-            description: "List all tools available from orchestrated MCP servers",
+            description:
+              "List all tools available from orchestrated MCP servers",
             inputSchema: {
               type: "object",
               properties: {},
@@ -268,88 +278,96 @@ export class LocalLLMProxyServer {
           },
           {
             name: "call_orchestrated_tool",
-            description: "Call any tool from orchestrated MCP servers through the orchestrator",
+            description:
+              "Call any tool from orchestrated MCP servers through the orchestrator",
             inputSchema: {
               type: "object",
               properties: {
                 server_name: {
                   type: "string",
-                  description: "Name of the MCP server to call the tool on"
+                  description: "Name of the MCP server to call the tool on",
                 },
                 tool_name: {
-                  type: "string", 
-                  description: "Name of the tool to call"
+                  type: "string",
+                  description: "Name of the tool to call",
                 },
                 arguments: {
                   type: "object",
-                  description: "Arguments to pass to the tool"
-                }
+                  description: "Arguments to pass to the tool",
+                },
               },
-              required: ["server_name", "tool_name"]
+              required: ["server_name", "tool_name"],
             },
           },
           {
             name: "delegate_to_local_llm",
-            description: "Delegate the entire request to local LLM with full orchestrator access and intelligent tool coordination",
+            description:
+              "Delegate the entire request to local LLM with full orchestrator access and intelligent tool coordination",
             inputSchema: {
               type: "object",
               properties: {
                 prompt: {
                   type: "string",
-                  description: "The complete prompt/request to process"
+                  description: "The complete prompt/request to process",
                 },
                 context: {
                   type: "object",
                   description: "Additional context for the request",
-                  default: {}
+                  default: {},
                 },
                 max_tokens: {
                   type: "number",
                   description: "Maximum tokens for response generation",
-                  default: 2000
+                  default: 2000,
                 },
                 temperature: {
                   type: "number",
                   description: "Temperature for response generation",
-                  default: 0.7
+                  default: 0.7,
                 },
                 enable_validation: {
                   type: "boolean",
                   description: "Enable response validation and fallback",
-                  default: true
-                }
+                  default: true,
+                },
               },
-              required: ["prompt"]
+              required: ["prompt"],
             },
           },
           {
             name: "sonar_query",
-            description: "Query Perplexity's Sonar API for real-time information with citations",
+            description:
+              "Query Perplexity's Sonar API for real-time information with citations",
             inputSchema: {
               type: "object",
               properties: {
                 query: {
                   type: "string",
-                  description: "The query to search for real-time information"
+                  description: "The query to search for real-time information",
                 },
                 max_tokens: {
                   type: "number",
                   description: "Maximum number of tokens to generate",
-                  default: 1000
+                  default: 1000,
                 },
                 temperature: {
                   type: "number",
                   description: "Temperature for response generation",
-                  default: 0.7
+                  default: 0.7,
                 },
                 model: {
                   type: "string",
                   description: "Sonar model to use",
-                  enum: ["sonar-pro", "sonar-online", "sonar-medium-online", "sonar-small-online"],
-                  default: "sonar-pro"
-                }
+                  enum: [
+                    "sonar-pro",
+                    "sonar-online",
+                    "sonar-medium-online",
+                    "sonar-small-online",
+                  ],
+                  default: "sonar-pro",
+                },
               },
-              required: ["query"]
+              required: ["query"],
             },
           },
         ],
@@ -366,18 +384,31 @@ export class LocalLLMProxyServer {
 
         switch (name) {
           case "generate_text_v2":
-            return await this.handleGenerateText(args as unknown as GenerateTextArgs);
+            return await this.handleGenerateText(
+              args as unknown as GenerateTextArgs,
+            );
           case "chat_completion":
-            return await this.handleChatCompletion(args as unknown as ChatCompletionArgs);
+            return await this.handleChatCompletion(
+              args as unknown as ChatCompletionArgs,
+            );
           case "rag_query":
             const fs = await import("fs/promises");
-            await fs.appendFile("tool-debug.log", `Tool handler: rag_query called with args: ${JSON.stringify(args)}\n`).catch(() => {});
+            await fs
+              .appendFile(
+                "tool-debug.log",
+                `Tool handler: rag_query called with args: ${JSON.stringify(args)}\n`,
+              )
+              .catch(() => {});
             console.error("MCP Server: About to call handleRAGQuery");
-            const result = await this.handleRAGQuery(args as unknown as RAGQueryArgs);
+            const result = await this.handleRAGQuery(
+              args as unknown as RAGQueryArgs,
+            );
             console.error("MCP Server: handleRAGQuery completed");
             return result;
           case "index_document":
-            return await this.handleIndexDocument(args as unknown as IndexDocumentArgs);
+            return await this.handleIndexDocument(
+              args as unknown as IndexDocumentArgs,
+            );
           case "save_rag_storage":
             return await this.handleSaveRAGStorage();
           case "clear_rag_storage":
@@ -387,20 +418,41 @@ export class LocalLLMProxyServer {
           case "orchestrator_status":
             return await this.handleOrchestratorStatus();
           case "discover_mcp_servers":
-            return await this.handleDiscoverMCPServers(args as { auto_connect?: boolean });
+            return await this.handleDiscoverMCPServers(
+              args as { auto_connect?: boolean },
+            );
           case "list_orchestrated_tools":
             return await this.handleListOrchestratedTools();
           case "call_orchestrated_tool":
-            return await this.handleCallOrchestratedTool(args as { server_name: string; tool_name: string; arguments?: any });
+            return await this.handleCallOrchestratedTool(
+              args as {
+                server_name: string;
+                tool_name: string;
+                arguments?: any;
+              },
+            );
           case "delegate_to_local_llm":
-            return await this.handleDelegateToLocalLLM(args as { prompt: string; context?: any; max_tokens?: number; temperature?: number; enable_validation?: boolean });
+            return await this.handleDelegateToLocalLLM(
+              args as {
+                prompt: string;
+                context?: any;
+                max_tokens?: number;
+                temperature?: number;
+                enable_validation?: boolean;
+              },
+            );
           case "sonar_query":
-            return await this.handleSonarQuery(args as unknown as SonarQueryArgs);
+            return await this.handleSonarQuery(
+              args as unknown as SonarQueryArgs,
+            );
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (error) {
-        console.error(`MCP Server: Error in tool handler for ${name}:`, (error as Error).message);
+        console.error(
+          `MCP Server: Error in tool handler for ${name}:`,
+          (error as Error).message,
+        );
         console.error(`MCP Server: Error stack:`, (error as Error).stack);
         return {
           content: [
@@ -415,22 +467,29 @@ export class LocalLLMProxyServer {
   }
 
   async handleGenerateText(args: GenerateTextArgs) {
-    const { prompt, max_tokens = 1000, temperature = 0.7, use_agentic = true, use_orchestrator = false, stream = false } = args;
+    const {
+      prompt,
+      max_tokens = 1000,
+      temperature = 0.7,
+      use_agentic = true,
+      use_orchestrator = false,
+      stream = false,
+    } = args;
 
     try {
       const result = await this.agenticService.runAgenticQuery(prompt, {
         maxTokens: max_tokens,
         temperature,
         useTools: use_agentic,
-        useOrchestrator: use_orchestrator
+        useOrchestrator: use_orchestrator,
       });
 
       let responseText = result.response;
-      
+
       // Add orchestrator metadata if available
       if (result.orchestratorResult) {
         responseText += `\n\n--- Orchestrator Info ---\n`;
-        responseText += `Tools Used: ${result.orchestratorResult.toolsUsed.join(', ')}\n`;
+        responseText += `Tools Used: ${result.orchestratorResult.toolsUsed.join(", ")}\n`;
         responseText += `Used Local LLM: ${result.orchestratorResult.usedLocalLLM}\n`;
         responseText += `Fallback Used: ${result.orchestratorResult.fallbackUsed}\n`;
         responseText += `Saved to RAG: ${result.orchestratorResult.savedToRAG}\n`;
@@ -450,16 +509,24 @@ export class LocalLLMProxyServer {
   }
 
   async handleChatCompletion(args: ChatCompletionArgs) {
-    const { messages, max_tokens = 1000, temperature = 0.7, use_agentic = true, stream = false } = args;
+    const {
+      messages,
+      max_tokens = 1000,
+      temperature = 0.7,
+      use_agentic = true,
+      stream = false,
+    } = args;
 
     try {
       // Convert messages to a single prompt for simplicity
-      const prompt = messages.map(msg => `${msg.role}: ${msg.content}`).join('\n');
-      
+      const prompt = messages
+        .map((msg) => `${msg.role}: ${msg.content}`)
+        .join("\n");
+
       const result = await this.agenticService.runAgenticQuery(prompt, {
         maxTokens: max_tokens,
         temperature,
-        useTools: use_agentic
+        useTools: use_agentic,
       });
 
       return {
@@ -481,34 +548,60 @@ export class LocalLLMProxyServer {
     try {
       // Write to file since console.error might not be visible
       const fs = await import("fs/promises");
-      await fs.appendFile("mcp-debug.log", `MCP Server: Starting RAG query with: ${query}\n`).catch(() => {});
-      
+      await fs
+        .appendFile(
+          "mcp-debug.log",
+          `MCP Server: Starting RAG query with: ${query}\n`,
+        )
+        .catch(() => {});
+
       console.error("MCP Server: Starting RAG query with:", query);
       console.error("MCP Server: RAG service exists:", !!this.ragService);
-      console.error("MCP Server: RAG service instance ID:", (this.ragService as any)?.instanceId);
-      
+      console.error(
+        "MCP Server: RAG service instance ID:",
+        (this.ragService as any)?.instanceId,
+      );
+
       // Check if documents are indexed
       const hasDocs = this.ragService.hasIndexedDocuments();
       console.error("MCP Server: Has indexed documents:", hasDocs);
-      await fs.appendFile("mcp-debug.log", `MCP Server: Has indexed documents: ${hasDocs}\n`).catch(() => {});
-      
+      await fs
+        .appendFile(
+          "mcp-debug.log",
+          `MCP Server: Has indexed documents: ${hasDocs}\n`,
+        )
+        .catch(() => {});
+
       const result = await this.ragService.queryDocuments(query);
       console.error("MCP Server: RAG query completed successfully");
-      await fs.appendFile("mcp-debug.log", `MCP Server: RAG query completed successfully\n`).catch(() => {});
+      await fs
+        .appendFile(
+          "mcp-debug.log",
+          `MCP Server: RAG query completed successfully\n`,
+        )
+        .catch(() => {});
 
       return {
         content: [
           {
             type: "text",
-            text: `Query: ${result.query}\n\nResponse: ${result.response}\n\n${result.sourceNodes ? `Source nodes: ${result.sourceNodes}` : 'No sources found'}`,
+            text: `Query: ${result.query}\n\nResponse: ${result.response}\n\n${result.sourceNodes ? `Source nodes: ${result.sourceNodes}` : "No sources found"}`,
           },
         ],
       };
     } catch (error) {
       const fs = await import("fs/promises");
-      await fs.appendFile("mcp-debug.log", `MCP Server: RAG query error: ${(error as Error).message}\n`).catch(() => {});
+      await fs
+        .appendFile(
+          "mcp-debug.log",
+          `MCP Server: RAG query error: ${(error as Error).message}\n`,
+        )
+        .catch(() => {});
       console.error("MCP Server: RAG query error:", (error as Error).message);
-      console.error("MCP Server: RAG query error stack:", (error as Error).stack);
+      console.error(
+        "MCP Server: RAG query error stack:",
+        (error as Error).stack,
+      );
       throw new Error(`RAG query failed: ${(error as Error).message}`);
     }
   }
@@ -560,7 +653,9 @@ export class LocalLLMProxyServer {
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to save RAG storage: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to save RAG storage: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -579,7 +674,9 @@ export class LocalLLMProxyServer {
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to clear RAG storage: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to clear RAG storage: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -603,15 +700,19 @@ export class LocalLLMProxyServer {
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to get RAG storage status: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to get RAG storage status: ${(error as Error).message}`,
+      );
     }
   }
 
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error("Local LLM Proxy MCP Server with LlamaIndex.TS integration running on stdio");
-    
+    console.error(
+      "Local LLM Proxy MCP Server with LlamaIndex.TS integration running on stdio",
+    );
+
     // Setup graceful shutdown
     this.setupGracefulShutdown();
   }
@@ -646,7 +747,9 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to get orchestrator status: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to get orchestrator status: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -670,7 +773,7 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
       // Re-discover servers
       const discoveryService = (orchestrator as any).discoveryService;
       const servers = await discoveryService.discoverMCPServers();
-      
+
       let result = `Discovered ${servers.length} MCP servers:\n`;
       for (const server of servers) {
         result += `- ${server.name}: ${server.status}\n`;
@@ -678,10 +781,11 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
 
       if (args.auto_connect !== false) {
         const clientManager = (orchestrator as any).clientManager;
-        const { successful, failed } = await clientManager.connectToAllDiscoveredServers();
+        const { successful, failed } =
+          await clientManager.connectToAllDiscoveredServers();
         result += `\nConnection Results:\n`;
-        result += `- Successful: ${successful.join(', ')}\n`;
-        result += `- Failed: ${failed.join(', ')}\n`;
+        result += `- Successful: ${successful.join(", ")}\n`;
+        result += `- Failed: ${failed.join(", ")}\n`;
       }
 
       return {
@@ -693,7 +797,9 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to discover MCP servers: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to discover MCP servers: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -716,7 +822,7 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
 
       const tools = orchestrator.getAvailableTools();
       let result = `Available orchestrated tools (${tools.length}):\n`;
-      
+
       for (const tool of tools) {
         result += `- ${tool.name} (from ${tool.serverName}): ${tool.description}\n`;
       }
@@ -730,14 +836,20 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
         ],
       };
     } catch (error) {
-      throw new Error(`Failed to list orchestrated tools: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to list orchestrated tools: ${(error as Error).message}`,
+      );
     }
   }
 
   /**
    * Handle call orchestrated tool request
    */
-  private async handleCallOrchestratedTool(args: { server_name: string; tool_name: string; arguments?: any }) {
+  private async handleCallOrchestratedTool(args: {
+    server_name: string;
+    tool_name: string;
+    arguments?: any;
+  }) {
     try {
       const orchestrator = this.agenticService.getOrchestratorService();
       if (!orchestrator) {
@@ -752,16 +864,24 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
       }
 
       const { server_name, tool_name, arguments: toolArgs } = args;
-      
+
       // Log the call attempt
-      console.error(`🎯 CURSOR REQUESTING ORCHESTRATED TOOL: ${server_name}.${tool_name}`);
+      console.error(
+        `🎯 CURSOR REQUESTING ORCHESTRATED TOOL: ${server_name}.${tool_name}`,
+      );
       console.error(`🎯 CURSOR ARGS:`, JSON.stringify(toolArgs, null, 2));
 
       // Get the client manager from orchestrator
       const clientManager = (orchestrator as any).clientManager;
-      const result = await clientManager.callTool(server_name, tool_name, toolArgs || {});
+      const result = await clientManager.callTool(
+        server_name,
+        tool_name,
+        toolArgs || {},
+      );
 
-      console.error(`🎯 CURSOR ORCHESTRATED TOOL RESULT: ${server_name}.${tool_name} completed`);
+      console.error(
+        `🎯 CURSOR ORCHESTRATED TOOL RESULT: ${server_name}.${tool_name} completed`,
+      );
 
       return {
         content: [
@@ -772,25 +892,38 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
         ],
       };
     } catch (error) {
-      console.error(`❌ CURSOR ORCHESTRATED TOOL ERROR:`, (error as Error).message);
-      throw new Error(`Failed to call orchestrated tool: ${(error as Error).message}`);
+      console.error(
+        `❌ CURSOR ORCHESTRATED TOOL ERROR:`,
+        (error as Error).message,
+      );
+      throw new Error(
+        `Failed to call orchestrated tool: ${(error as Error).message}`,
+      );
     }
   }
 
   /**
    * Handle delegate to local LLM request
    */
-  private async handleDelegateToLocalLLM(args: { 
-    prompt: string; 
-    context?: any; 
-    max_tokens?: number; 
-    temperature?: number; 
-    enable_validation?: boolean 
+  private async handleDelegateToLocalLLM(args: {
+    prompt: string;
+    context?: any;
+    max_tokens?: number;
+    temperature?: number;
+    enable_validation?: boolean;
   }) {
     try {
-      const { prompt, context = {}, max_tokens = 2000, temperature = 0.7, enable_validation = true } = args;
-      
-      console.error(`🧠 DELEGATING TO LOCAL LLM: ${prompt.substring(0, 100)}...`);
+      const {
+        prompt,
+        context = {},
+        max_tokens = 2000,
+        temperature = 0.7,
+        enable_validation = true,
+      } = args;
+
+      console.error(
+        `🧠 DELEGATING TO LOCAL LLM: ${prompt.substring(0, 100)}...`,
+      );
       console.error(`🧠 DELEGATION CONTEXT:`, JSON.stringify(context, null, 2));
 
       // Use the agentic service with orchestrator enabled
@@ -803,26 +936,28 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
           enableValidation: enable_validation,
           enableRules: true,
           enableRAG: true,
-          fallbackToCursor: enable_validation
-        }
+          fallbackToCursor: enable_validation,
+        },
       });
 
       let responseText = result.response;
-      
+
       // Add delegation metadata
       responseText += `\n\n--- Local LLM Delegation Info ---\n`;
-      responseText += `Tools Used: ${result.toolsUsed.join(', ')}\n`;
-      responseText += `Used Local LLM: ${result.orchestratorResult?.usedLocalLLM ?? result.metadata?.usedLocalLLM ?? 'Unknown'}\n`;
-      responseText += `Fallback Used: ${result.orchestratorResult?.fallbackUsed ?? result.metadata?.fallbackUsed ?? 'Unknown'}\n`;
-      responseText += `Saved to RAG: ${result.orchestratorResult?.savedToRAG ?? result.metadata?.savedToRAG ?? 'Unknown'}\n`;
-      
+      responseText += `Tools Used: ${result.toolsUsed.join(", ")}\n`;
+      responseText += `Used Local LLM: ${result.orchestratorResult?.usedLocalLLM ?? result.metadata?.usedLocalLLM ?? "Unknown"}\n`;
+      responseText += `Fallback Used: ${result.orchestratorResult?.fallbackUsed ?? result.metadata?.fallbackUsed ?? "Unknown"}\n`;
+      responseText += `Saved to RAG: ${result.orchestratorResult?.savedToRAG ?? result.metadata?.savedToRAG ?? "Unknown"}\n`;
+
       if (result.orchestratorResult) {
-        responseText += `Orchestrator Tools: ${result.orchestratorResult.toolsUsed.join(', ')}\n`;
-        responseText += `Validation Applied: ${result.orchestratorResult.validationResult ? 'Yes' : 'No'}\n`;
-        responseText += `Rules Applied: ${result.orchestratorResult.ruleEvaluation ? 'Yes' : 'No'}\n`;
+        responseText += `Orchestrator Tools: ${result.orchestratorResult.toolsUsed.join(", ")}\n`;
+        responseText += `Validation Applied: ${result.orchestratorResult.validationResult ? "Yes" : "No"}\n`;
+        responseText += `Rules Applied: ${result.orchestratorResult.ruleEvaluation ? "Yes" : "No"}\n`;
       }
 
-      console.error(`🧠 LOCAL LLM DELEGATION COMPLETED: ${result.toolsUsed.length} tools used`);
+      console.error(
+        `🧠 LOCAL LLM DELEGATION COMPLETED: ${result.toolsUsed.length} tools used`,
+      );
 
       return {
         content: [
@@ -834,7 +969,9 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
       };
     } catch (error) {
       console.error(`❌ LOCAL LLM DELEGATION ERROR:`, (error as Error).message);
-      throw new Error(`Failed to delegate to local LLM: ${(error as Error).message}`);
+      throw new Error(
+        `Failed to delegate to local LLM: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -849,14 +986,17 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
         await this.ragService.saveStorage();
         console.error("RAG storage saved successfully");
       } catch (error) {
-        console.error("Failed to save RAG storage on shutdown:", (error as Error).message);
+        console.error(
+          "Failed to save RAG storage on shutdown:",
+          (error as Error).message,
+        );
       }
       process.exit(0);
     };
 
-    process.on('SIGINT', () => shutdown('SIGINT'));
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGHUP', () => shutdown('SIGHUP'));
+    process.on("SIGINT", () => shutdown("SIGINT"));
+    process.on("SIGTERM", () => shutdown("SIGTERM"));
+    process.on("SIGHUP", () => shutdown("SIGHUP"));
   }
 
   /**
@@ -865,21 +1005,25 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
   private async handleSonarQuery(args: SonarQueryArgs) {
     try {
       if (!this.sonarService) {
-        throw new Error("Sonar service is not available. Please set PERPLEXITY_API_KEY environment variable.");
+        throw new Error(
+          "Sonar service is not available. Please set PERPLEXITY_API_KEY environment variable.",
+        );
       }
 
       console.error(`MCP Server: Querying Sonar API with: ${args.query}`);
-      
+
       const result = await this.sonarService.searchWithCitations(args.query, {
         max_tokens: args.max_tokens || 1000,
-        temperature: args.temperature || 0.7
+        temperature: args.temperature || 0.7,
       });
 
-      console.error(`MCP Server: Sonar API response received with ${result.sources.length} sources`);
+      console.error(
+        `MCP Server: Sonar API response received with ${result.sources.length} sources`,
+      );
 
       // Format the response with citations
       let responseText = result.answer;
-      
+
       if (result.sources.length > 0) {
         responseText += "\n\n**Sources:**\n";
         result.sources.forEach((source, index) => {
@@ -903,7 +1047,10 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
         ],
       };
     } catch (error) {
-      console.error(`MCP Server: Error in Sonar query:`, (error as Error).message);
+      console.error(
+        `MCP Server: Error in Sonar query:`,
+        (error as Error).message,
+      );
       return {
         content: [
           {

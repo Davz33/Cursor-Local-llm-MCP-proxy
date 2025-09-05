@@ -122,3 +122,4 @@ rag-storage/
 # Knowledge base (contains chat history and documentation)
 .knowledge/
 
+rag-storage/
