@@ -244,6 +244,16 @@ export class OrchestratorService {
       combinedRules += generalRules + "\n\n";
     } catch (error) {
       console.error("Orchestrator: Failed to read general orchestration rules:", (error as Error).message);
+      // Try alternative path
+      try {
+        const altRulesPath = join(process.cwd(), "src", "orchestrator", "general-orchestration-rules.txt");
+        console.log(`Orchestrator: Trying alternative rules path: ${altRulesPath}`);
+        const generalRules = readFileSync(altRulesPath, "utf-8");
+        combinedRules += generalRules + "\n\n";
+        console.log("Orchestrator: Successfully read general rules from alternative path");
+      } catch (altError) {
+        console.error("Orchestrator: Failed to read general orchestration rules from alternative path:", (altError as Error).message);
+      }
     }
     
     try {
@@ -301,10 +311,31 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
 
     try {
       const response = await this.generateLocalLLMResponse(selectionPrompt);
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      console.error(`Orchestrator: LLM tool selection response: ${response.substring(0, 200)}...`);
+      
+      // Try to extract JSON array from response
+      const jsonMatch = response.match(/\[[\s\S]*?\]/);
       if (jsonMatch) {
-        const selectedToolNames = JSON.parse(jsonMatch[0]);
-        return availableTools.filter(tool => selectedToolNames.includes(tool.name));
+        try {
+          const selectedToolNames = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(selectedToolNames)) {
+            console.error(`Orchestrator: LLM selected tools: ${selectedToolNames.join(', ')}`);
+            return availableTools.filter(tool => selectedToolNames.includes(tool.name));
+          }
+        } catch (parseError) {
+          console.error("Orchestrator: Failed to parse LLM tool selection JSON:", (parseError as Error).message);
+        }
+      }
+      
+      // Try to extract individual tool names from text
+      const toolNames = availableTools.map(t => t.name);
+      const foundTools = toolNames.filter(toolName => 
+        response.toLowerCase().includes(toolName.toLowerCase())
+      );
+      
+      if (foundTools.length > 0) {
+        console.error(`Orchestrator: Extracted tools from text: ${foundTools.join(', ')}`);
+        return availableTools.filter(tool => foundTools.includes(tool.name));
       }
     } catch (error) {
       console.error("Orchestrator: Failed to select tools using rules, using fallback:", (error as Error).message);
@@ -554,12 +585,18 @@ Format: {"tools_to_use": [...], "execution_order": [...], "reasoning": "...", "e
     let executionPlan;
     try {
       const planResponse = await this.generateLocalLLMResponse(planningPrompt);
+      console.error(`Orchestrator: LLM execution plan response: ${planResponse.substring(0, 200)}...`);
       
       // Try to extract JSON from the response (in case LLM adds extra text)
-      const jsonMatch = planResponse.match(/\{[\s\S]*\}/);
+      const jsonMatch = planResponse.match(/\{[\s\S]*?\}/);
       if (jsonMatch) {
-        executionPlan = JSON.parse(jsonMatch[0]);
-        console.error("Orchestrator: Local LLM execution plan:", executionPlan);
+        try {
+          executionPlan = JSON.parse(jsonMatch[0]);
+          console.error("Orchestrator: Local LLM execution plan:", executionPlan);
+        } catch (parseError) {
+          console.error("Orchestrator: Failed to parse execution plan JSON:", (parseError as Error).message);
+          throw new Error("Invalid JSON in execution plan");
+        }
       } else {
         throw new Error("No JSON found in response");
       }
@@ -596,26 +633,34 @@ Format: {"argument_name": "value"}`;
         let toolArgs;
         try {
           const argsResponse = await this.generateLocalLLMResponse(toolArgsPrompt);
+          console.error(`Orchestrator: LLM tool args response for ${tool.name}: ${argsResponse.substring(0, 200)}...`);
           
           // Try to extract JSON from the response
-          const jsonMatch = argsResponse.match(/\{[\s\S]*\}/);
+          const jsonMatch = argsResponse.match(/\{[\s\S]*?\}/);
           if (jsonMatch) {
-            toolArgs = JSON.parse(jsonMatch[0]);
-            
-            // Fix numeric parameters for sequential thinking tool
-            if (tool.name === 'sequentialthinking') {
-              if (toolArgs.thought_number) {
-                toolArgs.thought_number = parseInt(toolArgs.thought_number) || 1;
+            try {
+              toolArgs = JSON.parse(jsonMatch[0]);
+              
+              // Fix numeric parameters for sequential thinking tool
+              if (tool.name === 'sequentialthinking') {
+                if (toolArgs.thought_number) {
+                  toolArgs.thought_number = parseInt(toolArgs.thought_number) || 1;
+                }
+                if (toolArgs.total_thoughts) {
+                  toolArgs.total_thoughts = parseInt(toolArgs.total_thoughts) || 3;
+                }
               }
-              if (toolArgs.total_thoughts) {
-                toolArgs.total_thoughts = parseInt(toolArgs.total_thoughts) || 3;
-              }
+              
+              console.error(`Orchestrator: Successfully parsed args for ${tool.name}:`, toolArgs);
+            } catch (parseError) {
+              console.error(`Orchestrator: Failed to parse args JSON for ${tool.name}:`, (parseError as Error).message);
+              throw new Error("Invalid JSON in tool args");
             }
           } else {
             throw new Error("No JSON found in args response");
           }
         } catch (error) {
-          console.error(`Orchestrator: Failed to determine args for ${tool.name}, using smart defaults`);
+          console.error(`Orchestrator: Failed to determine args for ${tool.name}, using smart defaults:`, (error as Error).message);
           // Use smart defaults based on tool name
           toolArgs = this.getSmartDefaults(tool, prompt, context);
         }
