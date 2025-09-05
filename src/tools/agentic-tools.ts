@@ -9,6 +9,18 @@ export interface ToolExecutionContext {
 export interface Tool {
   name: string;
   description: string;
+  parameters: {
+    type: "object";
+    properties: Record<
+      string,
+      {
+        type: string;
+        description: string;
+        enum?: string[];
+      }
+    >;
+    required: string[];
+  };
   execute: (params: any, context?: ToolExecutionContext) => Promise<string>;
 }
 
@@ -19,6 +31,25 @@ export const mathTool: Tool = {
   name: "math",
   description:
     "Perform basic mathematical operations (add, subtract, multiply, divide)",
+  parameters: {
+    type: "object",
+    properties: {
+      operation: {
+        type: "string",
+        description: "The mathematical operation to perform",
+        enum: ["add", "subtract", "multiply", "divide"],
+      },
+      a: {
+        type: "number",
+        description: "The first number",
+      },
+      b: {
+        type: "number",
+        description: "The second number",
+      },
+    },
+    required: ["operation", "a", "b"],
+  },
   execute: async (params: {
     operation: string;
     a: number;
@@ -50,6 +81,25 @@ export const mathTool: Tool = {
 export const fileSystemTool: Tool = {
   name: "filesystem",
   description: "Read, write, and list files and directories",
+  parameters: {
+    type: "object",
+    properties: {
+      action: {
+        type: "string",
+        description: "The file system action to perform",
+        enum: ["read", "write", "list", "exists"],
+      },
+      path: {
+        type: "string",
+        description: "The file or directory path",
+      },
+      content: {
+        type: "string",
+        description: "Content to write to file (required for write action)",
+      },
+    },
+    required: ["action", "path"],
+  },
   execute: async (params: {
     action: string;
     path: string;
@@ -105,6 +155,16 @@ export const ragTool: Tool = {
   name: "rag",
   description:
     "Query indexed documents using RAG (Retrieval-Augmented Generation)",
+  parameters: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "The search query to find relevant documents",
+      },
+    },
+    required: ["query"],
+  },
   execute: async (
     params: { query: string },
     context?: ToolExecutionContext,

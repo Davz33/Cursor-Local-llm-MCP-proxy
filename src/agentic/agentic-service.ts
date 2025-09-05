@@ -7,12 +7,14 @@ import {
   OrchestratorService,
   OrchestratorOptions,
 } from "../orchestrator/orchestrator-service.js";
+import { ToolCallingService } from "./tool-calling-service.js";
 
 export interface AgenticOptions {
   maxTokens?: number;
   temperature?: number;
   useTools?: boolean;
   useOrchestrator?: boolean;
+  useDynamicToolCalling?: boolean;
   orchestratorOptions?: OrchestratorOptions;
 }
 
@@ -30,6 +32,7 @@ export class AgenticService {
   private llm: LLM;
   private ragService: RAGService;
   private orchestratorService: OrchestratorService | null = null;
+  public toolCallingService: ToolCallingService | null = null;
 
   constructor() {
     // Configure global settings and get LLM instance
@@ -43,6 +46,11 @@ export class AgenticService {
    */
   async initialize(): Promise<void> {
     await this.ragService.initialize();
+
+    // Initialize tool calling service
+    const tools = getAvailableToolsWithContext(this.ragService);
+    this.toolCallingService = new ToolCallingService(this.llm, tools);
+    console.error("Agentic Service: Tool Calling Service initialized");
 
     // Initialize orchestrator service if needed
     if (process.env.ENABLE_MCP_ORCHESTRATOR === "true") {
@@ -67,6 +75,7 @@ export class AgenticService {
       temperature = 0.7,
       useTools = true,
       useOrchestrator = false,
+      useDynamicToolCalling = true,
       orchestratorOptions = {},
     } = options;
 
@@ -95,6 +104,36 @@ export class AgenticService {
             usedLocalLLM: orchestratorResult.usedLocalLLM,
             fallbackUsed: orchestratorResult.fallbackUsed,
             savedToRAG: orchestratorResult.savedToRAG,
+          },
+        };
+      }
+
+      // Use dynamic tool calling if enabled and available
+      if (useTools && useDynamicToolCalling && this.toolCallingService) {
+        console.error("Agentic Service: Using Dynamic Tool Calling");
+        const toolContext: ToolExecutionContext = {
+          ragService: this.ragService,
+        };
+
+        const toolResult = await this.toolCallingService.processQuery(
+          prompt,
+          toolContext,
+          {
+            maxRetries: 3,
+            enableErrorReporting: true,
+          },
+        );
+
+        return {
+          response: toolResult.response,
+          toolsUsed: toolResult.toolsUsed,
+          metadata: {
+            maxTokens,
+            temperature,
+            useTools,
+            useOrchestrator: false,
+            useDynamicToolCalling: true,
+            toolResults: toolResult.toolResults,
           },
         };
       }
@@ -170,16 +209,32 @@ export class AgenticService {
     temperature: number,
   ): Promise<string> {
     try {
-      // TODO: Fix LLM completion API call for LlamaIndex.TS v0.11.28
-      // const response = await this.llm.complete({
-      //   prompt,
-      //   maxTokens,
-      //   temperature
-      // });
+      console.log("🤖 Calling real LLM for response generation...");
 
-      // return response.text || "No response generated";
-      return `LLM Response for: ${prompt} (maxTokens: ${maxTokens}, temperature: ${temperature})`;
+      // Use the chat method for non-streaming responses
+      const response = await this.llm.chat({
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+      });
+
+      // Extract the response content
+      if (response && response.message && response.message.content) {
+        const content = response.message.content as string;
+        console.log(
+          "✅ Real LLM response received:",
+          content.substring(0, 100) + "...",
+        );
+        return content;
+      } else {
+        console.log("⚠️ No content in LLM response, using fallback");
+        return `LLM Response for: ${prompt} (maxTokens: ${maxTokens}, temperature: ${temperature})`;
+      }
     } catch (error) {
+      console.error("❌ LLM generation failed:", error);
       throw new Error(`LLM generation failed: ${(error as Error).message}`);
     }
   }

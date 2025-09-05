@@ -18,6 +18,7 @@ export interface GenerateTextArgs {
   temperature?: number;
   use_agentic?: boolean;
   use_orchestrator?: boolean;
+  use_dynamic_tool_calling?: boolean;
   stream?: boolean;
 }
 
@@ -30,6 +31,7 @@ export interface ChatCompletionArgs {
   temperature?: number;
   use_agentic?: boolean;
   use_orchestrator?: boolean;
+  use_dynamic_tool_calling?: boolean;
   stream?: boolean;
 }
 
@@ -122,6 +124,12 @@ export class LocalLLMProxyServer {
                   description: "Whether to use agentic capabilities with tools",
                   default: true,
                 },
+                use_dynamic_tool_calling: {
+                  type: "boolean",
+                  description:
+                    "Whether to use dynamic tool calling (LM Studio pattern)",
+                  default: true,
+                },
                 stream: {
                   type: "boolean",
                   description: "Whether to stream the response",
@@ -166,6 +174,12 @@ export class LocalLLMProxyServer {
                 use_agentic: {
                   type: "boolean",
                   description: "Whether to use agentic capabilities with tools",
+                  default: true,
+                },
+                use_dynamic_tool_calling: {
+                  type: "boolean",
+                  description:
+                    "Whether to use dynamic tool calling (LM Studio pattern)",
                   default: true,
                 },
                 stream: {
@@ -472,6 +486,7 @@ export class LocalLLMProxyServer {
       max_tokens = 1000,
       temperature = 0.7,
       use_agentic = true,
+      use_dynamic_tool_calling = true,
       use_orchestrator = false,
       stream = false,
     } = args;
@@ -482,6 +497,7 @@ export class LocalLLMProxyServer {
         temperature,
         useTools: use_agentic,
         useOrchestrator: use_orchestrator,
+        useDynamicToolCalling: use_dynamic_tool_calling,
       });
 
       let responseText = result.response;
@@ -514,6 +530,7 @@ export class LocalLLMProxyServer {
       max_tokens = 1000,
       temperature = 0.7,
       use_agentic = true,
+      use_dynamic_tool_calling = true,
       stream = false,
     } = args;
 
@@ -527,6 +544,7 @@ export class LocalLLMProxyServer {
         maxTokens: max_tokens,
         temperature,
         useTools: use_agentic,
+        useDynamicToolCalling: use_dynamic_tool_calling,
       });
 
       return {
