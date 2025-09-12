@@ -704,7 +704,7 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
   }
 
   /**
-   * Execute tools and generate response
+   * Execute tools and generate response using proper LM Studio tool calling
    */
   private async executeToolsAndGenerateResponse(
     prompt: string,
@@ -714,173 +714,99 @@ Format: ["tool_name_1", "tool_name_2", ...]`;
     const toolsUsed: string[] = [];
     let toolResults: string[] = [];
 
-    // First, use local LLM to plan the tool execution strategy
-    const planningPrompt = `You are an intelligent MCP orchestrator. Analyze this request and plan which tools to use and in what order.
+    // Convert MCP tools to LM Studio tool format
+    const lmStudioTools = tools.map((tool) => ({
+      type: "function" as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema,
+      },
+    }));
 
-Request: "${prompt}"
+    // Create the tool calling prompt for LM Studio
+    const toolCallingPrompt = `You are an intelligent MCP orchestrator. You have access to the following tools to help answer the user's request.
 
-Available tools: ${tools.map((t) => `${t.name} (${t.serverName}): ${t.description}`).join("\n")}
+Available tools:
+${tools.map((t) => `- ${t.name} (${t.serverName}): ${t.description}`).join("\n")}
+
+User Request: "${prompt}"
 
 Context: ${JSON.stringify(context, null, 2)}
 
-Provide a JSON plan with:
-1. tools_to_use: array of tool names to call
-2. execution_order: array showing the sequence
-3. reasoning: why these tools are needed
-4. expected_outcome: what the final result should be
+If you need to use tools to answer this request, call them using the proper tool calling format. If you can answer directly without tools, provide a comprehensive response.
 
-Format: {"tools_to_use": [...], "execution_order": [...], "reasoning": "...", "expected_outcome": "..."}`;
+Remember: Only call tools if they are actually needed to answer the user's request.`;
 
-    let executionPlan;
     try {
-      const planResponse = await this.generateLocalLLMResponse(planningPrompt);
-      console.error(
-        `Orchestrator: LLM execution plan response: ${planResponse.substring(0, 200)}...`,
+      // Use LM Studio's tool calling mechanism
+      const llmResponse = await this.generateLocalLLMResponseWithTools(
+        toolCallingPrompt,
+        lmStudioTools,
       );
 
-      // Try to extract JSON from the response (in case LLM adds extra text)
-      const jsonMatch = planResponse.match(/\{[\s\S]*?\}/);
-      if (jsonMatch) {
-        try {
-          executionPlan = JSON.parse(jsonMatch[0]);
-          console.error(
-            "Orchestrator: Local LLM execution plan:",
-            executionPlan,
-          );
-        } catch (parseError) {
-          console.error(
-            "Orchestrator: Failed to parse execution plan JSON:",
-            (parseError as Error).message,
-          );
-          throw new Error("Invalid JSON in execution plan");
-        }
-      } else {
-        throw new Error("No JSON found in response");
-      }
-    } catch (error) {
-      console.error(
-        "Orchestrator: Failed to get execution plan, using all tools:",
-        (error as Error).message,
-      );
-      executionPlan = {
-        tools_to_use: tools.map((t) => t.name),
-        execution_order: tools.map((t) => t.name),
-        reasoning: "Fallback to using all available tools",
-        expected_outcome: "Process request with available tools",
-      };
-    }
+      // Check if the LLM made any tool calls
+      if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
+        console.error(
+          `Orchestrator: LLM made ${llmResponse.toolCalls.length} tool calls`,
+        );
 
-    // Execute tools based on the plan
-    const toolsToExecute = tools.filter((tool) =>
-      executionPlan.tools_to_use.includes(tool.name),
-    );
-
-    for (const tool of toolsToExecute) {
-      try {
-        // Use local LLM to determine tool arguments with better context
-        const toolArgsPrompt = `You are calling the tool "${tool.name}" from server "${tool.serverName}".
-
-Original request: "${prompt}"
-Tool description: "${tool.description}"
-Tool input schema: ${JSON.stringify(tool.inputSchema, null, 2)}
-Context: ${JSON.stringify(context, null, 2)}
-
-Determine the appropriate arguments for this tool call. Make sure to match the required parameters from the input schema.
-Return a JSON object with the arguments.
-
-Format: {"argument_name": "value"}`;
-
-        let toolArgs;
-        try {
-          const argsResponse =
-            await this.generateLocalLLMResponse(toolArgsPrompt);
-          console.error(
-            `Orchestrator: LLM tool args response for ${tool.name}: ${argsResponse.substring(0, 200)}...`,
-          );
-
-          // Try to extract JSON from the response
-          const jsonMatch = argsResponse.match(/\{[\s\S]*?\}/);
-          if (jsonMatch) {
-            try {
-              toolArgs = JSON.parse(jsonMatch[0]);
-
-              // Fix numeric parameters for sequential thinking tool
-              if (tool.name === "sequentialthinking") {
-                if (toolArgs.thought_number) {
-                  toolArgs.thought_number =
-                    parseInt(toolArgs.thought_number) || 1;
-                }
-                if (toolArgs.total_thoughts) {
-                  toolArgs.total_thoughts =
-                    parseInt(toolArgs.total_thoughts) || 3;
-                }
-              }
-
+        // Execute the tool calls
+        for (const toolCall of llmResponse.toolCalls) {
+          try {
+            const tool = tools.find((t) => t.name === toolCall.function.name);
+            if (!tool) {
               console.error(
-                `Orchestrator: Successfully parsed args for ${tool.name}:`,
-                toolArgs,
+                `Orchestrator: Tool ${toolCall.function.name} not found in available tools`,
               );
-            } catch (parseError) {
-              console.error(
-                `Orchestrator: Failed to parse args JSON for ${tool.name}:`,
-                (parseError as Error).message,
-              );
-              throw new Error("Invalid JSON in tool args");
+              continue;
             }
-          } else {
-            throw new Error("No JSON found in args response");
+
+            console.error(
+              `🔧 ORCHESTRATOR: Executing tool call: ${toolCall.function.name}`,
+            );
+            console.error(
+              `🔧 ORCHESTRATOR: Tool arguments:`,
+              JSON.stringify(toolCall.function.arguments, null, 2),
+            );
+
+            // Call the real tool using the client manager
+            const result = await this.clientManager.callTool(
+              tool.serverName,
+              tool.name,
+              toolCall.function.arguments,
+            );
+
+            toolsUsed.push(tool.name);
+            toolResults.push(`Tool ${tool.name}: ${JSON.stringify(result)}`);
+
+            console.error(
+              `✅ ORCHESTRATOR: Tool ${tool.name} executed successfully`,
+            );
+            console.error(
+              `✅ ORCHESTRATOR: Tool result:`,
+              JSON.stringify(result, null, 2),
+            );
+          } catch (error) {
+            const errorMessage = (error as Error).message;
+            console.error(
+              `❌ ORCHESTRATOR ERROR: ${toolCall.function.name} - ${errorMessage}`,
+            );
+            toolResults.push(
+              `❌ ORCHESTRATOR ERROR: ${toolCall.function.name} - ${errorMessage}`,
+            );
           }
-        } catch (error) {
-          console.error(
-            `Orchestrator: Failed to determine args for ${tool.name}, using smart defaults:`,
-            (error as Error).message,
-          );
-          // Use smart defaults based on tool name
-          toolArgs = this.getSmartDefaults(tool, prompt, context);
         }
 
-        // Call the real tool using the client manager
-        const result = await this.clientManager.callTool(
-          tool.serverName,
-          tool.name,
-          toolArgs,
-        );
-
-        toolsUsed.push(tool.name);
-        toolResults.push(`Tool ${tool.name}: ${JSON.stringify(result)}`);
-      } catch (error) {
-        const errorMessage = (error as Error).message;
-        console.error(`❌ ORCHESTRATOR ERROR: ${tool.name} - ${errorMessage}`);
-        console.error(
-          `Orchestrator: Tool execution failed for ${tool.name} from server ${tool.serverName}`,
-        );
-        console.error(`Orchestrator: Error details: ${errorMessage}`);
-        console.error(
-          `Orchestrator: Context when error occurred: ${JSON.stringify(context, null, 2)}`,
-        );
-
-        // Add detailed error information for fallback system
-        toolResults.push(
-          `❌ ORCHESTRATOR ERROR: ${tool.name} (${tool.serverName}) - ${errorMessage}`,
-        );
-        toolResults.push(`Context: ${JSON.stringify(context, null, 2)}`);
-        toolResults.push(
-          `Requesting fallback assistance for tool: ${tool.name}`,
-        );
-      }
-    }
-
-    // Use local LLM to synthesize the final response
-    const synthesisPrompt = `You are an intelligent MCP orchestrator. Synthesize a comprehensive response based on the original request and tool results.
+        // Generate final response incorporating tool results
+        const synthesisPrompt = `You are an intelligent MCP orchestrator. Based on the original request and the tool results, provide a comprehensive response.
 
 Original Request: "${prompt}"
 
 Tool Results:
 ${toolResults.join("\n")}
 
-Execution Plan: ${JSON.stringify(executionPlan, null, 2)}
-
-Provide a comprehensive, well-structured response that:
+Provide a well-structured response that:
 1. Directly addresses the original request
 2. Incorporates insights from the tool results
 3. Is clear and actionable
@@ -888,9 +814,23 @@ Provide a comprehensive, well-structured response that:
 
 Response:`;
 
-    const response = await this.generateLocalLLMResponse(synthesisPrompt);
-
-    return { response, toolsUsed };
+        const finalResponse =
+          await this.generateLocalLLMResponse(synthesisPrompt);
+        return { response: finalResponse, toolsUsed };
+      } else {
+        // No tool calls made, return the LLM's direct response
+        console.error("Orchestrator: No tool calls made by LLM");
+        return { response: llmResponse.content, toolsUsed: [] };
+      }
+    } catch (error) {
+      console.error(
+        "Orchestrator: Error in tool calling execution:",
+        (error as Error).message,
+      );
+      // Fallback to direct response
+      const fallbackResponse = await this.generateLocalLLMResponse(prompt);
+      return { response: fallbackResponse, toolsUsed: [] };
+    }
   }
 
   /**
@@ -916,6 +856,93 @@ Response:`;
       throw new Error(
         `Local LLM generation failed: ${(error as Error).message}`,
       );
+    }
+  }
+
+  /**
+   * Generate response using local LLM with tool calling support
+   * Uses direct OpenAI API calls to LM Studio for proper tool calling
+   */
+  private async generateLocalLLMResponseWithTools(
+    prompt: string,
+    tools: Array<{
+      type: "function";
+      function: {
+        name: string;
+        description: string;
+        parameters: any;
+      };
+    }>,
+  ): Promise<{
+    content: string;
+    toolCalls?: Array<{
+      function: {
+        name: string;
+        arguments: any;
+      };
+    }>;
+  }> {
+    try {
+      console.error(
+        "Orchestrator: Generating local LLM response with tools...",
+      );
+      console.error(
+        `Orchestrator: Available tools: ${tools.map((t) => t.function.name).join(", ")}`,
+      );
+
+      // Import OpenAI client for direct API calls
+      const { OpenAI } = await import("openai");
+      const { getLMStudioConfig } = await import("../config/llm-config.js");
+
+      const config = getLMStudioConfig();
+      const openai = new OpenAI({
+        baseURL: config.baseURL,
+        apiKey: "lm-studio", // LM Studio doesn't require real API key
+      });
+
+      // Make direct API call to LM Studio with tools
+      const completion = await openai.chat.completions.create({
+        model: config.model,
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        tools: tools,
+        temperature: config.temperature || 0.7,
+        max_tokens: config.maxTokens || 2000,
+      });
+
+      const message = completion.choices[0]?.message;
+      if (!message) {
+        throw new Error("No response from LM Studio");
+      }
+
+      // Extract content and tool calls
+      const content = message.content || "";
+      const toolCalls =
+        message.tool_calls?.map((tc: any) => ({
+          function: {
+            name: tc.function.name,
+            arguments: JSON.parse(tc.function.arguments),
+          },
+        })) || [];
+
+      console.error(
+        `Orchestrator: LM Studio response - content: ${content.length} chars, tool calls: ${toolCalls.length}`,
+      );
+
+      return {
+        content: content,
+        toolCalls: toolCalls,
+      };
+    } catch (error) {
+      console.error(
+        "Orchestrator: Error generating LLM response with tools:",
+        (error as Error).message,
+      );
+      throw error;
     }
   }
 
