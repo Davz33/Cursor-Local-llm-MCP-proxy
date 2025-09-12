@@ -7,6 +7,7 @@ import {
 import { AgenticService } from "../agentic/agentic-service.js";
 import { RAGService } from "../rag/rag-service.js";
 import { SonarService } from "../services/sonar-service.js";
+// import { createEnhancedMemoryTools } from "../tools/enhanced-memory-tools.js";
 import { config } from "dotenv";
 
 // Load environment variables from .env file
@@ -384,6 +385,33 @@ export class LocalLLMProxyServer {
               required: ["query"],
             },
           },
+          // Enhanced Memory Tools - Temporarily disabled
+          // {
+          //   name: "enhanced_memory_query",
+          //   description: "Query the enhanced memory system with code understanding, error learning, and graph reasoning",
+          //   inputSchema: {
+          //     type: "object",
+          //     properties: {
+          //       query: {
+          //         type: "string",
+          //         description: "The query to search for in the enhanced memory system"
+          //       },
+          //       context: {
+          //         type: "object",
+          //         description: "Additional context for the query (filePath, functionName, etc.)",
+          //         properties: {
+          //           filePath: { type: "string" },
+          //           functionName: { type: "string" },
+          //           className: { type: "string" },
+          //           lineNumber: { type: "number" },
+          //           variables: { type: "object" },
+          //           imports: { type: "array", items: { type: "string" } }
+          //         }
+          //       }
+          //     },
+          //     required: ["query"]
+          //   }
+          // },
         ],
       };
     });
@@ -459,6 +487,17 @@ export class LocalLLMProxyServer {
             return await this.handleSonarQuery(
               args as unknown as SonarQueryArgs,
             );
+          // Enhanced Memory Tools - Temporarily disabled
+          // case "enhanced_memory_query":
+          //   return await this.handleEnhancedMemoryQuery(args as any);
+          // case "learn_from_error":
+          //   return await this.handleLearnFromError(args as any);
+          // case "index_codebase":
+          //   return await this.handleIndexCodebase(args as any);
+          // case "get_memory_statistics":
+          //   return await this.handleGetMemoryStatistics();
+          // case "find_similar_errors":
+          //   return await this.handleFindSimilarErrors(args as any);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -1079,4 +1118,46 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
       };
     }
   }
+
+  // Enhanced Memory Tools - Temporarily disabled
+  // private async handleEnhancedMemoryQuery(args: any) {
+  //   try {
+  //     const enhancedMemoryTools = createEnhancedMemoryTools(this.agenticService.getLLM());
+  //     const tool = enhancedMemoryTools.find(t => t.name === "enhanced_memory_query");
+  //
+  //     if (!tool) {
+  //       throw new Error("Enhanced memory query tool not found");
+  //     }
+
+  //     const result = await tool.execute(args, {
+  //       ragService: this.ragService,
+  //       enhancedMemory: null // Will be initialized in the tool
+  //     });
+
+  //     return {
+  //       content: [
+  //         {
+  //           type: "text",
+  //           text: result,
+  //         },
+  //       ],
+  //     };
+  //   } catch (error) {
+  //     console.error(`MCP Server: Error in enhanced memory query:`, (error as Error).message);
+  //     return {
+  //       content: [
+  //         {
+  //           type: "text",
+  //           text: `Error in enhanced memory query: ${(error as Error).message}`,
+  //         },
+  //       ],
+  //     };
+  //   }
+  // }
+
+  // Enhanced Memory Tools - Temporarily disabled
+  // private async handleLearnFromError(args: any) { ... }
+  // private async handleIndexCodebase(args: any) { ... }
+  // private async handleGetMemoryStatistics() { ... }
+  // private async handleFindSimilarErrors(args: any) { ... }
 }
