@@ -215,6 +215,7 @@ export class OrchestratorService {
         metadata: {
           availableTools: availableTools.length,
           selectedTools: selectedTools.length,
+          selectedToolNames: selectedTools.map((t) => t.name),
           context,
         },
       };
@@ -745,6 +746,17 @@ Remember: Only call tools if they are actually needed to answer the user's reque
         lmStudioTools,
       );
 
+      console.error(
+        `Orchestrator: LLM response received - content length: ${llmResponse.content?.length || 0}, tool calls: ${llmResponse.toolCalls?.length || 0}`,
+      );
+
+      if (llmResponse.toolCalls) {
+        console.error(
+          `Orchestrator: Tool calls details:`,
+          JSON.stringify(llmResponse.toolCalls, null, 2),
+        );
+      }
+
       // Check if the LLM made any tool calls
       if (llmResponse.toolCalls && llmResponse.toolCalls.length > 0) {
         console.error(
@@ -904,6 +916,35 @@ Response:`;
       const completion = await openai.chat.completions.create({
         model: config.model,
         messages: [
+          {
+            role: "system",
+            content: `You are an intelligent assistant with access to tools. When you need to use a tool, you MUST use the tool calling format provided by the API, not inline text simulation.
+
+IMPORTANT: 
+- DO NOT write <thought> or any other tags in your response
+- DO NOT simulate tool execution in your text
+- ONLY use the actual tool calling mechanism
+- If you need to use sequential thinking, call the 'sequentialthinking' tool
+- Return tool calls in the 'tool_calls' array, not in your text response
+
+Example of correct tool calling:
+If asked to think sequentially, you should respond with a tool call like:
+{
+  "tool_calls": [{
+    "id": "call_1",
+    "type": "function",
+    "function": {
+      "name": "sequentialthinking",
+      "arguments": {
+        "thought": "Starting my analysis...",
+        "nextThoughtNeeded": true,
+        "thoughtNumber": 1,
+        "totalThoughts": 5
+      }
+    }
+  }]
+}`,
+          },
           {
             role: "user",
             content: prompt,
