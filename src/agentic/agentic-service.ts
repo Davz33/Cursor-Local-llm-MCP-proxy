@@ -42,6 +42,13 @@ export class AgenticService {
   }
 
   /**
+   * Get the LLM instance
+   */
+  getLLM(): LLM {
+    return this.llm;
+  }
+
+  /**
    * Initialize the agentic service
    */
   async initialize(): Promise<void> {
@@ -82,7 +89,14 @@ export class AgenticService {
     try {
       // Use orchestrator if enabled and available
       if (useOrchestrator && this.orchestratorService) {
-        console.error("Agentic Service: Using MCP Orchestrator");
+        console.error("🎯 AGENTIC SERVICE: Using MCP Orchestrator");
+        console.error(
+          `🎯 AGENTIC SERVICE: Orchestrator available: ${!!this.orchestratorService}`,
+        );
+        console.error(
+          `🎯 AGENTIC SERVICE: Processing prompt: ${prompt.substring(0, 100)}...`,
+        );
+
         const orchestratorResult = await this.orchestratorService.processQuery(
           prompt,
           {
@@ -90,6 +104,19 @@ export class AgenticService {
             temperature,
             ...orchestratorOptions,
           },
+        );
+
+        console.error(
+          `🎯 AGENTIC SERVICE: Orchestrator completed with ${orchestratorResult.toolsUsed.length} tools used`,
+        );
+        console.error(
+          `🎯 AGENTIC SERVICE: Tools used: ${orchestratorResult.toolsUsed.join(", ")}`,
+        );
+        console.error(
+          `🎯 AGENTIC SERVICE: Used local LLM: ${orchestratorResult.usedLocalLLM}`,
+        );
+        console.error(
+          `🎯 AGENTIC SERVICE: Fallback used: ${orchestratorResult.fallbackUsed}`,
         );
 
         return {
@@ -108,9 +135,19 @@ export class AgenticService {
         };
       }
 
+      // Log orchestrator status if not used
+      if (useOrchestrator && !this.orchestratorService) {
+        console.error(
+          "⚠️ AGENTIC SERVICE: Orchestrator requested but not available!",
+        );
+        console.error(
+          "⚠️ AGENTIC SERVICE: Check ENABLE_MCP_ORCHESTRATOR environment variable",
+        );
+      }
+
       // Use dynamic tool calling if enabled and available
       if (useTools && useDynamicToolCalling && this.toolCallingService) {
-        console.error("Agentic Service: Using Dynamic Tool Calling");
+        console.error("🔧 AGENTIC SERVICE: Using Dynamic Tool Calling");
         const toolContext: ToolExecutionContext = {
           ragService: this.ragService,
         };
