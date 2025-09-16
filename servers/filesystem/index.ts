@@ -124,8 +124,19 @@ class FilesystemServer {
     return readFileSync(path, "utf-8");
   }
 
-  private writeFile(path: string, content: string): void {
+  private writeFile(
+    path: string,
+    content: string,
+    confirm: boolean = false,
+  ): void {
     this.validatePath(path);
+
+    // Check if file exists and requires confirmation
+    if (existsSync(path) && !confirm) {
+      throw new Error(
+        `File already exists: ${path}. Use confirm: true to overwrite.`,
+      );
+    }
 
     // Ensure directory exists
     const dir = dirname(path);
@@ -146,7 +157,7 @@ class FilesystemServer {
     mkdirSync(path, { recursive: true });
   }
 
-  private deleteFile(path: string): void {
+  private deleteFile(path: string, confirm: boolean = false): void {
     this.validatePath(path);
 
     if (!existsSync(path)) {
@@ -160,10 +171,16 @@ class FilesystemServer {
       );
     }
 
+    if (!confirm) {
+      throw new Error(
+        `Deleting file: ${path}. Use confirm: true to proceed with deletion.`,
+      );
+    }
+
     unlinkSync(path);
   }
 
-  private deleteDirectory(path: string): void {
+  private deleteDirectory(path: string, confirm: boolean = false): void {
     this.validatePath(path);
 
     if (!existsSync(path)) {
@@ -179,6 +196,12 @@ class FilesystemServer {
     const entries = readdirSync(path);
     if (entries.length > 0) {
       throw new Error(`Directory is not empty: ${path}`);
+    }
+
+    if (!confirm) {
+      throw new Error(
+        `Deleting directory: ${path}. Use confirm: true to proceed with deletion.`,
+      );
     }
 
     rmdirSync(path);
@@ -258,7 +281,7 @@ class FilesystemServer {
           break;
 
         case "write_file":
-          this.writeFile(args.path, args.content);
+          this.writeFile(args.path, args.content, args.confirm);
           result = { success: true, message: `File written to ${args.path}` };
           break;
 
@@ -271,12 +294,12 @@ class FilesystemServer {
           break;
 
         case "delete_file":
-          this.deleteFile(args.path);
+          this.deleteFile(args.path, args.confirm);
           result = { success: true, message: `File deleted: ${args.path}` };
           break;
 
         case "delete_directory":
-          this.deleteDirectory(args.path);
+          this.deleteDirectory(args.path, args.confirm);
           result = {
             success: true,
             message: `Directory deleted: ${args.path}`,
@@ -352,7 +375,8 @@ const FILESYSTEM_TOOLS: Tool[] = [
   },
   {
     name: "write_file",
-    description: "Write content to a file",
+    description:
+      "Write content to a file. Requires confirm: true to overwrite existing files.",
     inputSchema: {
       type: "object",
       properties: {
@@ -363,6 +387,11 @@ const FILESYSTEM_TOOLS: Tool[] = [
         content: {
           type: "string",
           description: "Content to write to the file",
+        },
+        confirm: {
+          type: "boolean",
+          description: "Set to true to confirm overwriting an existing file",
+          default: false,
         },
       },
       required: ["path", "content"],
@@ -384,7 +413,8 @@ const FILESYSTEM_TOOLS: Tool[] = [
   },
   {
     name: "delete_file",
-    description: "Delete a file",
+    description:
+      "Delete a file. Requires confirm: true to proceed with deletion.",
     inputSchema: {
       type: "object",
       properties: {
@@ -392,19 +422,30 @@ const FILESYSTEM_TOOLS: Tool[] = [
           type: "string",
           description: "Path to the file to delete",
         },
+        confirm: {
+          type: "boolean",
+          description: "Set to true to confirm deletion of the file",
+          default: false,
+        },
       },
       required: ["path"],
     },
   },
   {
     name: "delete_directory",
-    description: "Delete an empty directory",
+    description:
+      "Delete an empty directory. Requires confirm: true to proceed with deletion.",
     inputSchema: {
       type: "object",
       properties: {
         path: {
           type: "string",
           description: "Path to the directory to delete",
+        },
+        confirm: {
+          type: "boolean",
+          description: "Set to true to confirm deletion of the directory",
+          default: false,
         },
       },
       required: ["path"],

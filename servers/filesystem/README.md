@@ -9,6 +9,7 @@ A Model Context Protocol (MCP) server that provides secure filesystem operations
 - **Directory Operations**: List, create, and delete directories
 - **File Information**: Get detailed information about files and directories
 - **Permission Checking**: Validates file permissions and access rights
+- **Confirmation Prompts**: Requires explicit confirmation for destructive operations (modify/delete)
 
 ## Available Tools
 
@@ -54,6 +55,26 @@ Add to your MCP client configuration:
 ## Security
 
 The server enforces strict directory access controls. Only paths within the specified allowed directories can be accessed. This prevents unauthorized access to sensitive system files.
+
+### Confirmation Requirements
+
+For safety, destructive operations require explicit confirmation:
+
+- **File Overwrite**: When writing to an existing file, you must set `confirm: true` to overwrite
+- **File Deletion**: When deleting a file, you must set `confirm: true` to proceed
+- **Directory Deletion**: When deleting a directory, you must set `confirm: true` to proceed
+
+Example:
+```json
+{
+  "name": "write_file",
+  "arguments": {
+    "path": "existing-file.txt",
+    "content": "New content",
+    "confirm": true
+  }
+}
+```
 
 ## Development
 
