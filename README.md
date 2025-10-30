@@ -6,104 +6,97 @@ This server is compatible with Cursor and similar IDEs supporting MCP client def
 
 The project's goal and current minimal functionalities also aims at equipping your LM-studio local agent with agentic tools like RAG, memory graphs, math calculations and more, such that the locally-provided answer's accuracy is futher increased, decreasing the likelihood of interaction with the more expensive cloud-native models.
 
+> **Compatibility note:** The current tool-calling stack has been exercised in LM Studio with `openai/gpt-oss-120b`, `qwen2.5-coder-32b-instruct`, and `qwen3-coder-32b-instruct`. Other models may require prompt or temperature tuning.
+
+> **LM Studio logging:** Because we format tool calls manually, the LM Studio JSON logs show an empty `tool_calls` array; the serialized tool request is embedded in the assistant `content` block instead. This is expected.
+
 ## 🔄 Architecture & Workflow
 
 ```mermaid
-graph TB
-    %% User and IDE Layer
-    User[👤 User] --> Cursor[🖥️ Cursor IDE]
-    Cursor --> MCPClient[MCP Client]
-    
-    %% MCP Communication Layer
-    MCPClient --> MCPServer[🔧 Local LLM Proxy MCP Server]
-    MCPServer --> AgenticService[🧠 Agentic Service]
-    MCPServer --> RAGService[📚 RAG Service]
-    
-    %% Agentic Capabilities
-    AgenticService --> MathTool[➕ Math Tool]
-    AgenticService --> FileSystemTool[📁 File System Tool]
-    AgenticService --> RAGTool[🔍 RAG Tool]
-    AgenticService --> SonarTool[🌐 Sonar API Tool]
-    
-    %% RAG Persistence Layer
-    RAGService --> VectorIndex[🗃️ Vector Store Index]
-    RAGService --> DocumentStorage[💾 Document Storage]
-    DocumentStorage --> DiskStorage[(💿 Persistent Storage)]
-    
-    %% LM Studio Integration
-    AgenticService --> LLMConfig[⚙️ LLM Configuration]
-    RAGService --> LLMConfig
-    LLMConfig --> LMStudio[🤖 LM Studio Server]
-    LMStudio --> LocalModel[🧠 Local LLM Model]
-    
-    %% Embedding Integration
-    RAGService --> EmbeddingModel[🔤 HuggingFace Embeddings]
-    
-    %% External API Integration
-    SonarTool --> SonarAPI[🔍 Perplexity Sonar API]
-    SonarAPI --> RealTimeData[📡 Real-time Information]
-    
-    %% Data Flow
-    User -->|"1. Query/Request"| Cursor
-    Cursor -->|"2. MCP Protocol"| MCPClient
-    MCPClient -->|"3. Tool Call"| MCPServer
-    
-    MCPServer -->|"4a. Agentic Processing"| AgenticService
-    MCPServer -->|"4b. RAG Query"| RAGService
-    
-    AgenticService -->|"5a. Tool Selection"| MathTool
-    AgenticService -->|"5b. Tool Selection"| FileSystemTool
-    AgenticService -->|"5c. Tool Selection"| RAGTool
-    AgenticService -->|"5d. Web Search Query"| SonarTool
-    
-    RAGService -->|"6a. Document Indexing"| VectorIndex
-    RAGService -->|"6b. Auto-Save"| DocumentStorage
-    DocumentStorage -->|"7. Persist to Disk"| DiskStorage
-    
-    VectorIndex -->|"8. Query Processing"| EmbeddingModel
-    EmbeddingModel -->|"9. Vector Search"| VectorIndex
-    
-    SonarTool -->|"10. API Request"| SonarAPI
-    SonarAPI -->|"11. Real-time Search"| RealTimeData
-    RealTimeData -->|"12. Search Results"| SonarAPI
-    SonarAPI -->|"13. API Response"| SonarTool
-    
-    AgenticService -->|"14. LLM Generation"| LLMConfig
-    RAGService -->|"15. LLM Generation"| LLMConfig
-    LLMConfig -->|"16. API Call"| LMStudio
-    LMStudio -->|"17. Model Inference"| LocalModel
-    
-    LocalModel -->|"18. Response"| LMStudio
-    LMStudio -->|"19. API Response"| LLMConfig
-    LLMConfig -->|"20. Processed Response"| AgenticService
-    LLMConfig -->|"21. Processed Response"| RAGService
-    
-    AgenticService -->|"22. Final Response"| MCPServer
-    RAGService -->|"23. Final Response"| MCPServer
-    SonarTool -->|"24. Final Response"| MCPServer
-    MCPServer -->|"25. MCP Response"| MCPClient
-    MCPClient -->|"26. Display Result"| Cursor
-    Cursor -->|"27. Show to User"| User
-    
-    %% Persistence Flow
+%%{init: {"flowchart": {"curve": "basis"}} }%%
+flowchart TB
+    subgraph User_IDE_Layer [User & IDE Layer]
+        User([👤 User]) --> Cursor([🖥️ Cursor IDE])
+        Cursor --> MCPClient([MCP Client])
+    end
+
+    subgraph MCP_Layer [MCP Communication Layer]
+        MCPClient --> MCPServer([🔧 Local LLM Proxy MCP Server])
+    end
+
+    subgraph Services [Agentic & RAG Services]
+        MCPServer --> AgenticService([🧠 Agentic Service])
+        MCPServer --> RAGService([📚 RAG Service])
+
+        AgenticService --> MathTool([➕ Math Tool])
+        AgenticService --> FileSystemTool([📁 File System Tool])
+        AgenticService --> RAGTool([🔍 RAG Tool])
+        AgenticService --> SonarTool([🌐 Sonar API Tool])
+
+        RAGService --> VectorIndex([🗃️ Vector Store Index])
+        RAGService --> DocumentStorage([💾 Document Storage])
+        DocumentStorage --> DiskStorage[(💿 Persistent Storage)]
+    end
+
+    subgraph LM_Studio [LM Studio Integration]
+        AgenticService --> LLMConfig([⚙️ LLM Configuration])
+        RAGService --> LLMConfig
+        LLMConfig --> LMStudio([🤖 LM Studio Server])
+        LMStudio --> LocalModel([🧠 Local LLM Model])
+    end
+
+    subgraph Embeddings [Embedding Integration]
+        RAGService --> EmbeddingModel([🔤 HuggingFace Embeddings])
+    end
+
+    subgraph External_APIs [External API Integration]
+        SonarTool --> SonarAPI([🔍 Perplexity Sonar API])
+        SonarAPI --> RealTimeData([📡 Real-time Information])
+    end
+
+    User -.->|"1. Query"| Cursor
+    Cursor -.->|"2. MCP Protocol"| MCPClient
+    MCPClient -.->|"3. Tool Call"| MCPServer
+
+    MCPServer -.->|"4a. Agentic Processing"| AgenticService
+    MCPServer -.->|"4b. RAG Query"| RAGService
+
+    AgenticService -.->|"5a. Tool Selection"| MathTool
+    AgenticService -.->|"5b. Tool Selection"| FileSystemTool
+    AgenticService -.->|"5c. Tool Selection"| RAGTool
+    AgenticService -.->|"5d. Web Search"| SonarTool
+
+    RAGService -.->|"6a. Document Indexing"| VectorIndex
+    RAGService -.->|"6b. Auto-Save"| DocumentStorage
+    DocumentStorage -.->|"7. Persist to Disk"| DiskStorage
+
+    VectorIndex -.->|"8. Query Processing"| EmbeddingModel
+    EmbeddingModel -.->|"9. Vector Search"| VectorIndex
+
+    SonarTool -.->|"10. API Request"| SonarAPI
+    SonarAPI -.->|"11. Real-time Search"| RealTimeData
+    RealTimeData -.->|"12. Search Results"| SonarAPI
+    SonarAPI -.->|"13. API Response"| SonarTool
+
+    AgenticService -.->|"14. LLM Generation"| LLMConfig
+    RAGService -.->|"15. LLM Generation"| LLMConfig
+    LLMConfig -.->|"16. API Call"| LMStudio
+    LMStudio -.->|"17. Model Inference"| LocalModel
+
+    LocalModel -.->|"18. Response"| LMStudio
+    LMStudio -.->|"19. API Response"| LLMConfig
+    LLMConfig -.->|"20. Processed Response"| AgenticService
+    LLMConfig -.->|"21. Processed Response"| RAGService
+
+    AgenticService -.->|"22. Final Response"| MCPServer
+    RAGService -.->|"23. Final Response"| MCPServer
+    SonarTool -.->|"24. Final Response"| MCPServer
+    MCPServer -.->|"25. MCP Response"| MCPClient
+    MCPClient -.->|"26. Display Result"| Cursor
+    Cursor -.->|"27. Show to User"| User
+
     DiskStorage -.->|"28. Load on Startup"| DocumentStorage
     DocumentStorage -.->|"29. Recreate Index"| VectorIndex
-    
-    %% Styling
-    classDef userLayer fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef mcpLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef serviceLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
-    classDef toolLayer fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef storageLayer fill:#fce4ec,stroke:#880e4f,stroke-width:2px
-    classDef llmLayer fill:#e0f2f1,stroke:#004d40,stroke-width:2px
-    
-    class User,Cursor userLayer
-    class MCPClient,MCPServer mcpLayer
-    class AgenticService,RAGService serviceLayer
-    class MathTool,FileSystemTool,RAGTool,SonarTool toolLayer
-    class VectorIndex,DocumentStorage,DiskStorage storageLayer
-    class LLMConfig,LMStudio,LocalModel,EmbeddingModel llmLayer
-    class SonarAPI,RealTimeData toolLayer
 ```
 
 ## 🚀 Features
@@ -195,9 +188,10 @@ npm install
 npm run build
 ```
 
-4. **Install evaluation dependencies (optional but required for DeepEval tests):**
+4. **(Optional) Bootstrap the Pixi environment for DeepEval tests:**
 ```bash
-pip install -r requirements.txt
+# install Pixi if you don't already have it: https://pixi.sh/latest/
+pixi install
 ```
 
 **⚠️ Important:** You must build the project before using it with MCP clients like Cursor.
@@ -236,7 +230,15 @@ Add the following configuration to your MCP client (e.g., Cursor's `mcp.json`):
 
 **Replace `/path/to/your/local-llm-proxy` with the actual path to your cloned repository.**
 
-### 4. Start the MCP Server
+### 4. Install the System Prompt in LM Studio
+
+1. Open the file `prompts/agentic-system-prompt.md` and copy its contents.
+2. In LM Studio, either:
+   - Paste the prompt into your active preset via the UI, or
+   - Edit `~/.lmstudio/config-presets/<your-preset>.json` and update `operation.fields.value` with the prompt text.
+3. Restart the preset in LM Studio so the prompt is picked up before running evaluations.
+
+### 5. Start the MCP Server
 
 **Production:**
 ```bash
@@ -404,9 +406,11 @@ Run automated DeepEval checks to ensure tool-calling behavior remains stable:
 
 ```bash
 npm run build
-pip install -r requirements.txt
+pixi install            # one-time environment bootstrap
+pixi run evaluate-tool-calling
+
+# alternatively, if you already activated Pixi:
 python deepeval/evaluate_tool_calling.py
-pixi run evaluate-tool-calling  # uses the pixi environment with deterministic local metrics
 ```
 
 ### Testing MCP Tools
