@@ -1,0 +1,19 @@
+[project]
+name = "local-llm-proxy"
+version = "0.1.0"
+description = "Pixi environment for DeepEval regression and supporting scripts"
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[environments.default]
+features = ["base"]
+
+[feature.base.dependencies]
+python = "3.11.*"
+
+[feature.base.pypi-dependencies]
+deepeval = ">=0.22.0"
+
+[tasks.evaluate-tool-calling]
+cmd = ["python", "deepeval/evaluate_tool_calling.py"]
+

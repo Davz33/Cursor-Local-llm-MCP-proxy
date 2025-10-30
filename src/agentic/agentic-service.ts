@@ -8,6 +8,7 @@ import {
   OrchestratorOptions,
 } from "../orchestrator/orchestrator-service.js";
 import { ToolCallingService } from "./tool-calling-service.js";
+import type { ToolCall } from "./tool-calling-service.js";
 
 export interface AgenticOptions {
   maxTokens?: number;
@@ -21,6 +22,7 @@ export interface AgenticOptions {
 export interface AgenticResult {
   response: string;
   toolsUsed: string[];
+  toolCalls?: ToolCall[];
   metadata?: Record<string, unknown>;
   orchestratorResult?: any;
 }
@@ -164,6 +166,7 @@ export class AgenticService {
         return {
           response: toolResult.response,
           toolsUsed: toolResult.toolsUsed,
+          toolCalls: toolResult.toolCalls,
           metadata: {
             maxTokens,
             temperature,
@@ -171,6 +174,7 @@ export class AgenticService {
             useOrchestrator: false,
             useDynamicToolCalling: true,
             toolResults: toolResult.toolResults,
+            toolCalls: toolResult.toolCalls,
           },
         };
       }
@@ -225,6 +229,7 @@ export class AgenticService {
       return {
         response,
         toolsUsed,
+        toolCalls: [],
         metadata: {
           maxTokens,
           temperature,

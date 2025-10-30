@@ -79,3 +79,6 @@
 This release resolves the critical issue where the system was reporting tool usage that wasn't actually happening, providing users with accurate visibility into tool execution and improving the overall reliability of the tool calling system.
 
 The fix ensures that when tools are reported as "used", they are actually being called and executed through the proper MCP protocol, not just simulated in the LLM's text response.
+
+
+
