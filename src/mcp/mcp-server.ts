@@ -55,7 +55,7 @@ export interface SonarQueryArgs {
 }
 
 /**
- * Local LLM Proxy MCP Server with LlamaIndex.TS integration
+ * Local LLM Proxy MCP Server with retrieval and agentic integration
  */
 export class LocalLLMProxyServer {
   private server: Server;
@@ -767,7 +767,7 @@ export class LocalLLMProxyServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error(
-      "Local LLM Proxy MCP Server with LlamaIndex.TS integration running on stdio",
+      "Local LLM Proxy MCP Server with retrieval and agentic integration running on stdio",
     );
 
     // Setup graceful shutdown

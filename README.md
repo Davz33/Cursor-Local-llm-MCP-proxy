@@ -1,6 +1,6 @@
-# Enhanced Local LLM Proxy MCP Server with LlamaIndex.TS
+# Enhanced Local LLM Proxy MCP Server
 
-A powerful TypeScript-based MCP (Model Context Protocol) server that enhances local LLM capabilities with agentic behavior, RAG (Retrieval-Augmented Generation), and tool integration using LlamaIndex.TS.
+A TypeScript-based MCP (Model Context Protocol) server that enhances local LLM capabilities with agentic behavior, retrieval-augmented responses, and dynamic tool integration.
 
 This server is compatible with Cursor and similar IDEs supporting MCP client definitions similar to Cursor's `mcp.json`. The server's goal is to take load (and budgeting) off the more powerful cloud-based LLMs in Cursor (and similar) and use them for either validation purposes against the locally prompted LLMs, and/or fallback system.  
 
@@ -16,42 +16,42 @@ The project's goal and current minimal functionalities also aims at equipping yo
 %%{init: {"flowchart": {"curve": "basis"}} }%%
 flowchart TB
     subgraph User_IDE_Layer [User & IDE Layer]
-        User([👤 User]) --> Cursor([🖥️ Cursor IDE])
+        User([User]) --> Cursor([Cursor IDE])
         Cursor --> MCPClient([MCP Client])
     end
 
     subgraph MCP_Layer [MCP Communication Layer]
-        MCPClient --> MCPServer([🔧 Local LLM Proxy MCP Server])
+        MCPClient --> MCPServer([Local LLM Proxy MCP Server])
     end
 
-    subgraph Services [Agentic & RAG Services]
-        MCPServer --> AgenticService([🧠 Agentic Service])
-        MCPServer --> RAGService([📚 RAG Service])
+    subgraph Services [Agentic & Retrieval Services]
+        MCPServer --> AgenticService([Agentic Service])
+        MCPServer --> RetrievalService([Retrieval Service])
 
-        AgenticService --> MathTool([➕ Math Tool])
-        AgenticService --> FileSystemTool([📁 File System Tool])
-        AgenticService --> RAGTool([🔍 RAG Tool])
-        AgenticService --> SonarTool([🌐 Sonar API Tool])
+        AgenticService --> MathTool([Math Tool])
+        AgenticService --> FileSystemTool([File System Tool])
+        AgenticService --> RetrievalTool([Retrieval Tool])
+        AgenticService --> SonarTool([Web Search Tool])
 
-        RAGService --> VectorIndex([🗃️ Vector Store Index])
-        RAGService --> DocumentStorage([💾 Document Storage])
-        DocumentStorage --> DiskStorage[(💿 Persistent Storage)]
+        RetrievalService --> VectorIndex([Vector Store])
+        RetrievalService --> DocumentStorage([Document Storage])
+        DocumentStorage --> DiskStorage[(Persistent Storage)]
     end
 
     subgraph LM_Studio [LM Studio Integration]
-        AgenticService --> LLMConfig([⚙️ LLM Configuration])
-        RAGService --> LLMConfig
-        LLMConfig --> LMStudio([🤖 LM Studio Server])
-        LMStudio --> LocalModel([🧠 Local LLM Model])
+        AgenticService --> LLMConfig([LLM Configuration])
+        RetrievalService --> LLMConfig
+        LLMConfig --> LMStudio([LM Studio Server])
+        LMStudio --> LocalModel([Local LLM Model])
     end
 
     subgraph Embeddings [Embedding Integration]
-        RAGService --> EmbeddingModel([🔤 HuggingFace Embeddings])
+        RetrievalService --> EmbeddingModel([Embedding Model])
     end
 
     subgraph External_APIs [External API Integration]
-        SonarTool --> SonarAPI([🔍 Perplexity Sonar API])
-        SonarAPI --> RealTimeData([📡 Real-time Information])
+        SonarTool --> SonarAPI([Perplexity Sonar API])
+        SonarAPI --> RealTimeData([Real-time Information])
     end
 
     User -.->|"1. Query"| Cursor
@@ -59,15 +59,15 @@ flowchart TB
     MCPClient -.->|"3. Tool Call"| MCPServer
 
     MCPServer -.->|"4a. Agentic Processing"| AgenticService
-    MCPServer -.->|"4b. RAG Query"| RAGService
+    MCPServer -.->|"4b. Retrieval Query"| RetrievalService
 
     AgenticService -.->|"5a. Tool Selection"| MathTool
     AgenticService -.->|"5b. Tool Selection"| FileSystemTool
-    AgenticService -.->|"5c. Tool Selection"| RAGTool
+    AgenticService -.->|"5c. Tool Selection"| RetrievalTool
     AgenticService -.->|"5d. Web Search"| SonarTool
 
-    RAGService -.->|"6a. Document Indexing"| VectorIndex
-    RAGService -.->|"6b. Auto-Save"| DocumentStorage
+    RetrievalService -.->|"6a. Document Indexing"| VectorIndex
+    RetrievalService -.->|"6b. Auto-Save"| DocumentStorage
     DocumentStorage -.->|"7. Persist to Disk"| DiskStorage
 
     VectorIndex -.->|"8. Query Processing"| EmbeddingModel
@@ -79,17 +79,17 @@ flowchart TB
     SonarAPI -.->|"13. API Response"| SonarTool
 
     AgenticService -.->|"14. LLM Generation"| LLMConfig
-    RAGService -.->|"15. LLM Generation"| LLMConfig
+    RetrievalService -.->|"15. LLM Generation"| LLMConfig
     LLMConfig -.->|"16. API Call"| LMStudio
     LMStudio -.->|"17. Model Inference"| LocalModel
 
     LocalModel -.->|"18. Response"| LMStudio
     LMStudio -.->|"19. API Response"| LLMConfig
     LLMConfig -.->|"20. Processed Response"| AgenticService
-    LLMConfig -.->|"21. Processed Response"| RAGService
+    LLMConfig -.->|"21. Processed Response"| RetrievalService
 
     AgenticService -.->|"22. Final Response"| MCPServer
-    RAGService -.->|"23. Final Response"| MCPServer
+    RetrievalService -.->|"23. Final Response"| MCPServer
     SonarTool -.->|"24. Final Response"| MCPServer
     MCPServer -.->|"25. MCP Response"| MCPClient
     MCPClient -.->|"26. Display Result"| Cursor
@@ -440,7 +440,7 @@ src/
 
 ### Core Components
 - **MCP Server**: TypeScript-based Model Context Protocol communication
-- **LlamaIndex.TS Integration**: Modern v0.11.28 with Settings API
+- **Retrieval Engine**: Embedding-powered document indexing with deterministic storage
 - **LM Studio Adapter**: OpenAI-compatible API integration
 - **RAG Service**: Document indexing and querying with HuggingFace embeddings
 - **Agentic Service**: Tool-integrated LLM interactions
