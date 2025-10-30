@@ -195,6 +195,11 @@ npm install
 npm run build
 ```
 
+4. **Install evaluation dependencies (optional but required for DeepEval tests):**
+```bash
+pip install -r requirements.txt
+```
+
 **⚠️ Important:** You must build the project before using it with MCP clients like Cursor.
 
 ## 🚀 Usage
@@ -391,6 +396,17 @@ npm run start:with-validation
 
 # Development mode with hot reload
 npm run dev
+```
+
+### DeepEval Tool-Calling Regression
+
+Run automated DeepEval checks to ensure tool-calling behavior remains stable:
+
+```bash
+npm run build
+pip install -r requirements.txt
+python deepeval/evaluate_tool_calling.py
+pixi run evaluate-tool-calling  # uses the pixi environment with deterministic local metrics
 ```
 
 ### Testing MCP Tools

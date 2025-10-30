@@ -50,27 +50,46 @@ export class ToolCallingService {
         const toolName = match[1];
         const parametersStr = match[2];
         if (toolName && parametersStr) {
-          // Try to fix common JSON issues
-          let fixedParametersStr = parametersStr;
+          let parameters: Record<string, any> | null = null;
 
-          // Fix missing quotes around property names
-          fixedParametersStr = fixedParametersStr.replace(/(\w+):/g, '"$1":');
+          try {
+            parameters = JSON.parse(parametersStr);
+          } catch (primaryError) {
+            let fixedParametersStr = parametersStr
+              .replace(/([,{]\s*)([a-zA-Z_][\w]*)\s*:/g, '$1"$2":')
+              .replace(
+                /:\s*([A-Za-z_][A-Za-z0-9_\-\s]*)(\s*[,}])/g,
+                (fullMatch, value, tail) => {
+                  const trimmed = value.trim();
+                  if (
+                    trimmed === "true" ||
+                    trimmed === "false" ||
+                    trimmed === "null" ||
+                    /^".*"$/.test(trimmed) ||
+                    /^-?\d+(\.\d+)?$/.test(trimmed)
+                  ) {
+                    return `: ${trimmed}${tail}`;
+                  }
 
-          // Fix missing quotes around string values
-          fixedParametersStr = fixedParametersStr.replace(
-            /:\s*([^",{\[\s][^,}]*?)(\s*[,}])/g,
-            ': "$1"$2',
-          );
+                  return `: "${trimmed}"${tail}`;
+                },
+              );
 
-          // Fix unterminated strings (missing closing quotes)
-          fixedParametersStr = fixedParametersStr.replace(
-            /"([^"]*?)(\s*[,}])/g,
-            '"$1"$2',
-          );
+            try {
+              parameters = JSON.parse(fixedParametersStr);
+            } catch (secondaryError) {
+              console.error(
+                `Failed to parse tool call: ${match[0]}`,
+                secondaryError,
+              );
+              console.log(`Raw parameters string: ${parametersStr}`);
+            }
+          }
 
-          const parameters = JSON.parse(fixedParametersStr);
-          toolCalls.push({ name: toolName, parameters });
-          console.log(`🔧 Parsed tool call: ${toolName}`, parameters);
+          if (parameters) {
+            toolCalls.push({ name: toolName, parameters });
+            console.log(`🔧 Parsed tool call: ${toolName}`, parameters);
+          }
         }
       } catch (error) {
         console.error(`Failed to parse tool call: ${match[0]}`, error);
@@ -256,10 +275,12 @@ Please respond with either a direct answer or use the appropriate tool(s) to hel
     response: string;
     toolResults: ToolCallResult[];
     toolsUsed: string[];
+    toolCalls: ToolCall[];
   }> {
     const { maxRetries = 3, enableErrorReporting = true } = options;
     const toolResults: ToolCallResult[] = [];
     const toolsUsed: string[] = [];
+    const executedToolCalls: ToolCall[] = [];
 
     try {
       // Generate tool calling prompt
@@ -278,6 +299,7 @@ Please respond with either a direct answer or use the appropriate tool(s) to hel
           response: llmResponse,
           toolResults: [],
           toolsUsed: [],
+          toolCalls: [],
         };
       }
 
@@ -286,6 +308,10 @@ Please respond with either a direct answer or use the appropriate tool(s) to hel
         const result = await this.executeToolCall(toolCall, context);
         toolResults.push(result);
         toolsUsed.push(toolCall.name);
+        executedToolCalls.push({
+          name: toolCall.name,
+          parameters: toolCall.parameters,
+        });
 
         if (!result.success && enableErrorReporting) {
           // Report error back to LLM for retry
@@ -304,6 +330,7 @@ Please respond with either a direct answer or use the appropriate tool(s) to hel
         response: finalResponse,
         toolResults,
         toolsUsed,
+        toolCalls: executedToolCalls,
       };
     } catch (error) {
       throw new Error(`Tool calling failed: ${(error as Error).message}`);

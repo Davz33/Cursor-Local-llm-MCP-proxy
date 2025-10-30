@@ -4,6 +4,7 @@ import path from "path";
 
 export interface ToolExecutionContext {
   ragService: RAGService;
+  enhancedMemory?: any; // Optional enhanced memory context
 }
 
 export interface Tool {

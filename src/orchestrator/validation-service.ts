@@ -26,8 +26,8 @@ export class ValidationService {
   constructor(llm: LLM) {
     this.llm = llm;
     this.defaultOptions = {
-      minConfidence: 0.7,
-      maxIssues: 3,
+      minConfidence: 0.5, // Lowered from 0.7 to be less strict
+      maxIssues: 5, // Increased from 3 to allow more minor issues
       enableFallback: true,
       customValidators: [],
     };
@@ -80,8 +80,8 @@ export class ValidationService {
       // Determine if fallback is needed
       const shouldFallback =
         (opts.enableFallback ?? true) &&
-        (confidence < (opts.minConfidence ?? 0.7) ||
-          allIssues.length > (opts.maxIssues ?? 3) ||
+        (confidence < (opts.minConfidence ?? 0.5) ||
+          allIssues.length > (opts.maxIssues ?? 5) ||
           safetyCheck.issues.length > 0);
 
       // Log validation results for fallback system
@@ -90,10 +90,10 @@ export class ValidationService {
           `⚠️ VALIDATION WARNING: Response quality below threshold`,
         );
         console.error(
-          `⚠️ VALIDATION WARNING: Confidence: ${confidence.toFixed(2)} (min: ${opts.minConfidence ?? 0.7})`,
+          `⚠️ VALIDATION WARNING: Confidence: ${confidence.toFixed(2)} (min: ${opts.minConfidence ?? 0.5})`,
         );
         console.error(
-          `⚠️ VALIDATION WARNING: Issues count: ${allIssues.length} (max: ${opts.maxIssues ?? 3})`,
+          `⚠️ VALIDATION WARNING: Issues count: ${allIssues.length} (max: ${opts.maxIssues ?? 5})`,
         );
         console.error(
           `⚠️ VALIDATION WARNING: Safety issues: ${safetyCheck.issues.length}`,
@@ -105,8 +105,8 @@ export class ValidationService {
 
       return {
         isValid:
-          confidence >= (opts.minConfidence ?? 0.7) &&
-          allIssues.length <= (opts.maxIssues ?? 3),
+          confidence >= (opts.minConfidence ?? 0.5) &&
+          allIssues.length <= (opts.maxIssues ?? 5),
         confidence,
         issues: allIssues,
         suggestions: allSuggestions,

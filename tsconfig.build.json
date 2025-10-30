@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "src/rag/ast-graph-builder.ts",
+    "src/rag/enhanced-rag-service.ts",
+    "src/rag/enhanced-memory-orchestrator.ts",
+    "src/rag/error-learning-service.ts",
+    "src/tools/enhanced-memory-tools.ts"
+  ]
+}
+
+
+
+

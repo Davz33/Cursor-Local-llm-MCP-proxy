@@ -1,11 +1,11 @@
 {
   "name": "local-llm-proxy-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Enhanced MCP server for local LLM with RAG, agentic capabilities, and tool integration using LlamaIndex.TS",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "start:with-validation": "LLM_VALIDATION_ENABLED=true USE_LOCAL_VALIDATOR=true node dist/index.js",
     "dev": "tsx index.ts",
@@ -15,6 +15,10 @@
     "prebuild": "npm run clean"
   },
   "dependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/parser": "^7.23.0",
+    "@babel/traverse": "^7.23.0",
+    "@babel/types": "^7.23.0",
     "@llamaindex/huggingface": "^0.1.28",
     "@llamaindex/openai": "^0.4.18",
     "@modelcontextprotocol/sdk": "^0.4.0",

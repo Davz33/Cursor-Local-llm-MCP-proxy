@@ -179,6 +179,69 @@ The orchestrator exposes several new tools:
                        └──────────────────┘
 ```
 
+## Tool Calling Behavior
+
+### Multi-Turn Tool Calling Pattern
+
+The orchestrator implements a sophisticated multi-turn tool calling pattern that follows LM Studio's recommended approach:
+
+1. **Tool Selection Phase**: The orchestrator analyzes the query and selects appropriate tools based on:
+   - Keyword matching
+   - Context analysis
+   - Rules engine evaluation
+   - Tool availability
+
+2. **LLM Tool Calling Phase**: The LLM receives the selected tools and may:
+   - Make actual tool calls through the API
+   - Use a multi-turn conversation pattern
+   - Follow the "default tool use" format for complex scenarios
+
+3. **Tool Execution Phase**: Selected tools are executed and results are incorporated
+
+### Tool Call Reporting
+
+The system provides clear visibility into tool usage:
+
+```
+--- Local LLM Delegation Info ---
+Tools Used: sequentialthinking
+Used Local LLM: true
+Fallback Used: false
+Saved to RAG: true
+Tools Selected by Orchestrator: resolve-library-id, sequentialthinking
+Tools Actually Called: sequentialthinking
+Validation Applied: Yes
+Rules Applied: Yes
+```
+
+**Key Metrics:**
+- **Tools Used**: Tools actually executed by the system
+- **Tools Selected by Orchestrator**: Tools chosen based on query analysis
+- **Tools Actually Called**: Tools the LLM decided to use (may differ from selected)
+
+### Common Tool Calling Patterns
+
+#### Sequential Thinking Tool
+When complex analysis is needed, the system:
+1. Selects the `sequentialthinking` tool
+2. LLM makes actual tool calls with structured arguments
+3. Results are incorporated into the final response
+
+#### Multi-Tool Scenarios
+For complex queries requiring multiple tools:
+1. Orchestrator selects relevant tools
+2. LLM may use them in sequence or parallel
+3. Results are synthesized into a coherent response
+
+### Troubleshooting Tool Calls
+
+If tools aren't being called as expected:
+
+1. **Check System Prompt**: Ensure the LLM understands tool calling format
+2. **Verify Tool Selection**: Review orchestrator logs for tool selection logic
+3. **Examine LLM Response**: Look for inline tool simulation vs actual API calls
+4. **Review Multi-Turn Flow**: Complex tools may require multiple conversation turns
+
 ## Benefits
 
 1. **Unified Tool Access**: Access all MCP tools through a single interface

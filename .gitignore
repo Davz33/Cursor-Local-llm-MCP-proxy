@@ -47,6 +47,14 @@ index.js.map
 # Optional eslint cache
 .eslintcache
 
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Virtual environments / Pixi build artifacts
+.venv/
+.pixi/
+
 # Microbundle cache
 .rpt2_cache/
 .rts2_cache_cjs/
@@ -123,3 +131,6 @@ rag-storage/
 .knowledge/
 
 rag-storage/
+todos.md
+question.md
+prompt.md
