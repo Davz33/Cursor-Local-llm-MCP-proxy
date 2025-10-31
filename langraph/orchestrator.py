@@ -167,7 +167,7 @@ def _final_stage(state: PipelineState) -> PipelineState:
         "filesystem",
         {
             "action": "list",
-            "path": Path(".").resolve().as_posix(),
+            "path": ".",
         },
     )
     state.add_artifact("workspace inventory captured")
