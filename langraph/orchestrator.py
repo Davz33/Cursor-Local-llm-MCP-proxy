@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from langgraph.graph import StateGraph
 
@@ -21,12 +20,12 @@ class PipelineState:
     """Mutable state propagated through the LangGraph workflow."""
 
     prompt: str
-    artifacts: List[str] = field(default_factory=list)
-    tools_planned: List[Dict[str, Any]] = field(default_factory=list)
-    context: Dict[str, Any] = field(default_factory=dict)
+    artifacts: list[str] = field(default_factory=list)
+    tools_planned: list[dict[str, object]] = field(default_factory=list)
+    context: dict[str, object] = field(default_factory=dict)
     step: int = 0
 
-    def append_tool(self, name: str, parameters: Dict[str, Any]) -> None:
+    def append_tool(self, name: str, parameters: dict[str, object]) -> None:
         self.tools_planned.append({"tool": name, "parameters": parameters})
 
     def add_artifact(self, description: str) -> None:
@@ -203,17 +202,20 @@ def _build_graph():
     return graph.compile()
 
 
-_COMPILED_GRAPH = None
+_COMPILED_GRAPH: StateGraph | None = None
 
 
-def run_langraph_pipeline(prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
+def run_langraph_pipeline(prompt: str, context: dict[str, object] | None = None) -> str:
     """Execute the LangGraph workflow and return a JSON payload."""
 
     global _COMPILED_GRAPH
     if _COMPILED_GRAPH is None:
         _COMPILED_GRAPH = _build_graph()
 
-    initial_state = PipelineState(prompt=prompt, context=context or {})
+    initial_state = PipelineState(
+        prompt=prompt,
+        context=context if context is not None else {},
+    )
     result = _COMPILED_GRAPH.invoke(initial_state)
 
     # LangGraph returns a dict, not the dataclass directly
