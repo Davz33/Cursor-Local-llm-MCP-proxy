@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import path from "path";
 
 interface LangGraphPlanResult {
@@ -12,6 +12,7 @@ interface LangGraphPlanResult {
 
 export class LangGraphRunner {
   private pythonPath: string;
+  private pythonExecutable: string | null = null;
   private initialized = false;
 
   constructor() {
@@ -27,12 +28,41 @@ export class LangGraphRunner {
     const fs = await import("fs/promises");
     try {
       await fs.access(this.pythonPath);
+      this.resolvePythonExecutable();
       this.initialized = true;
     } catch (error) {
       throw new Error(
         `LangGraph orchestrator not found at ${this.pythonPath}: ${(error as Error).message}`,
       );
     }
+  }
+
+  private resolvePythonExecutable(): string {
+    if (this.pythonExecutable) {
+      return this.pythonExecutable;
+    }
+
+    const candidates = [
+      process.env.PYTHON_EXECUTABLE,
+      process.env.PYTHON,
+      process.env.PYTHON_PATH,
+      "python3",
+      "python",
+      "py",
+    ].filter((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0);
+
+    for (const candidate of candidates) {
+      const result = spawnSync(candidate, ["--version"], { stdio: "ignore" });
+
+      if (!result.error) {
+        this.pythonExecutable = candidate;
+        return candidate;
+      }
+    }
+
+    throw new Error(
+      `Unable to locate a Python executable. Checked: ${candidates.join(", ") || "none"}`,
+    );
   }
 
   async buildPlan(
@@ -47,7 +77,7 @@ export class LangGraphRunner {
         context,
       });
 
-      const python = spawn("python3", [this.pythonPath], {
+      const python = spawn(this.resolvePythonExecutable(), [this.pythonPath], {
         cwd: process.cwd(),
       });
 
