@@ -4,7 +4,7 @@ A TypeScript-based MCP (Model Context Protocol) server that enhances local LLM c
 
 This server is compatible with Cursor and similar IDEs supporting MCP client definitions similar to Cursor's `mcp.json`. The server's goal is to take load (and budgeting) off the more powerful cloud-based LLMs in Cursor (and similar) and use them for either validation purposes against the locally prompted LLMs, and/or fallback system.  
 
-The project's goal and current minimal functionalities also aims at equipping your LM-studio local agent with agentic tools like RAG, memory graphs, math calculations and more, such that the locally-provided answer's accuracy is futher increased, decreasing the likelihood of interaction with the more expensive cloud-native models.
+The project's goal and current minimal functionalities also aims at equipping your LM-studio local agent with agentic tools like RAG, memory graphs, and workspace automations, such that the locally-provided answer's accuracy is further increased, decreasing the likelihood of interaction with the more expensive cloud-native models.
 
 > **Compatibility note:** The current tool-calling stack has been exercised in LM Studio with `openai/gpt-oss-120b`, `qwen2.5-coder-32b-instruct`, and `qwen3-coder-32b-instruct`. Other models may require prompt or temperature tuning.
 
@@ -28,7 +28,6 @@ flowchart TB
         MCPServer --> AgenticService([Agentic Service])
         MCPServer --> RetrievalService([Retrieval Service])
 
-        AgenticService --> MathTool([Math Tool])
         AgenticService --> FileSystemTool([File System Tool])
         AgenticService --> RetrievalTool([Retrieval Tool])
         AgenticService --> SonarTool([Web Search Tool])
@@ -61,10 +60,9 @@ flowchart TB
     MCPServer -.->|"4a. Agentic Processing"| AgenticService
     MCPServer -.->|"4b. Retrieval Query"| RetrievalService
 
-    AgenticService -.->|"5a. Tool Selection"| MathTool
-    AgenticService -.->|"5b. Tool Selection"| FileSystemTool
-    AgenticService -.->|"5c. Tool Selection"| RetrievalTool
-    AgenticService -.->|"5d. Web Search"| SonarTool
+    AgenticService -.->|"5a. Tool Selection"| FileSystemTool
+    AgenticService -.->|"5b. Tool Selection"| RetrievalTool
+    AgenticService -.->|"5c. Web Search"| SonarTool
 
     RetrievalService -.->|"6a. Document Indexing"| VectorIndex
     RetrievalService -.->|"6b. Auto-Save"| DocumentStorage
@@ -102,7 +100,6 @@ flowchart TB
 ## 🚀 Features
 
 ### 🧠 Agentic Capabilities
-- **Math Tool**: Performs basic mathematical operations (add, subtract, multiply, divide)
 - **File System Tool**: Read, write, and list files and directories
 - **RAG System**: Document indexing and querying with natural language
 
@@ -433,7 +430,7 @@ src/
 ├── agentic/
 │   └── agentic-service.ts     # Agentic LLM interactions with tools
 ├── tools/
-│   └── agentic-tools.ts       # Tool definitions (math, filesystem, RAG)
+│   └── agentic-tools.ts       # Tool definitions (filesystem, RAG)
 └── mcp/
     └── mcp-server.ts          # MCP server implementation
 ```
