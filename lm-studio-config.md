@@ -33,7 +33,6 @@ curl -X POST http://localhost:1234/v1/chat/completions \
 ## Enhanced MCP Server Features
 
 ### 🧠 Agentic Capabilities
-- **Math Tool**: Performs basic mathematical operations
 - **Weather Tool**: Provides mock weather information
 - **File System Tool**: Read, write, and list files
 - **RAG System**: Document indexing and querying

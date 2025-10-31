@@ -26,57 +26,6 @@ export interface Tool {
 }
 
 /**
- * Math tool for basic arithmetic operations
- */
-export const mathTool: Tool = {
-  name: "math",
-  description:
-    "Perform basic mathematical operations (add, subtract, multiply, divide)",
-  parameters: {
-    type: "object",
-    properties: {
-      operation: {
-        type: "string",
-        description: "The mathematical operation to perform",
-        enum: ["add", "subtract", "multiply", "divide"],
-      },
-      a: {
-        type: "number",
-        description: "The first number",
-      },
-      b: {
-        type: "number",
-        description: "The second number",
-      },
-    },
-    required: ["operation", "a", "b"],
-  },
-  execute: async (params: {
-    operation: string;
-    a: number;
-    b: number;
-  }): Promise<string> => {
-    const { operation, a, b } = params;
-
-    switch (operation) {
-      case "add":
-        return `Result: ${a} + ${b} = ${a + b}`;
-      case "subtract":
-        return `Result: ${a} - ${b} = ${a - b}`;
-      case "multiply":
-        return `Result: ${a} * ${b} = ${a * b}`;
-      case "divide":
-        if (b === 0) {
-          return "Error: Division by zero is not allowed";
-        }
-        return `Result: ${a} / ${b} = ${a / b}`;
-      default:
-        return `Error: Unknown operation '${operation}'. Supported operations: add, subtract, multiply, divide`;
-    }
-  },
-};
-
-/**
  * File system tool for file operations
  */
 export const fileSystemTool: Tool = {
@@ -189,7 +138,7 @@ export const ragTool: Tool = {
  * Get all available tools
  */
 export function getAvailableTools(): Tool[] {
-  return [mathTool, fileSystemTool, ragTool];
+  return [fileSystemTool, ragTool];
 }
 
 /**
@@ -197,7 +146,6 @@ export function getAvailableTools(): Tool[] {
  */
 export function getAvailableToolsWithContext(ragService: RAGService): Tool[] {
   return [
-    mathTool,
     fileSystemTool,
     {
       ...ragTool,

@@ -39,6 +39,10 @@ async function main() {
       throw new Error("Payload must include a string 'prompt' field.");
     }
 
+    if (payload.useOrchestrator) {
+      process.env.ENABLE_MCP_ORCHESTRATOR = "true";
+    }
+
     const agenticService = new AgenticService();
     await agenticService.initialize();
 
@@ -58,10 +62,15 @@ async function main() {
       }
     }
 
+    const useOrchestrator =
+      typeof payload.useOrchestrator === "boolean"
+        ? payload.useOrchestrator
+        : false;
+
     const result = await agenticService.runAgenticQuery(payload.prompt, {
       useTools: true,
-      useDynamicToolCalling: true,
-      useOrchestrator: false,
+      useDynamicToolCalling: !useOrchestrator,
+      useOrchestrator: useOrchestrator,
       maxTokens: payload.maxTokens ?? 500,
       temperature: payload.temperature ?? 0.7,
     });

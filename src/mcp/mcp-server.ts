@@ -881,7 +881,7 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
       let result = `Available orchestrated tools (${tools.length}):\n`;
 
       for (const tool of tools) {
-        result += `- ${tool.name} (from ${tool.serverName}): ${tool.description}\n`;
+        result += `- ${tool}\n`;
       }
 
       return {

@@ -13,6 +13,7 @@ python = "3.11.*"
 
 [feature.base.pypi-dependencies]
 deepeval = ">=0.22.0"
+langgraph = ">=0.0.60"
 
 [tasks.evaluate-tool-calling]
 cmd = ["python", "deepeval/evaluate_tool_calling.py"]

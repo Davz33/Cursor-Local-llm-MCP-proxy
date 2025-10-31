@@ -134,3 +134,10 @@ rag-storage/
 todos.md
 question.md
 prompt.md
+
+# DeepEval test artifacts
+.deepeval/
+tmp_pipeline_*.txt
+tmp_pipeline_*.json
+tmp_pipeline_*.md
+synthetic_*.csv
