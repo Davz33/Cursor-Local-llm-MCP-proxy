@@ -63,10 +63,7 @@ export class AgenticService {
 
     // Initialize orchestrator service if needed
     if (process.env.ENABLE_MCP_ORCHESTRATOR === "true") {
-      this.orchestratorService = new OrchestratorService(
-        this.llm,
-        this.ragService,
-      );
+      this.orchestratorService = new OrchestratorService(this.ragService);
       await this.orchestratorService.initialize();
       console.error("Agentic Service: MCP Orchestrator initialized");
     }
@@ -121,9 +118,16 @@ export class AgenticService {
           `🎯 AGENTIC SERVICE: Fallback used: ${orchestratorResult.fallbackUsed}`,
         );
 
+        // Convert orchestrator plan to toolCalls format for DeepEval
+        const toolCalls = orchestratorResult.plan.map((step: any) => ({
+          name: step.tool,
+          parameters: step.parameters,
+        }));
+
         return {
           response: orchestratorResult.response,
           toolsUsed: orchestratorResult.toolsUsed,
+          toolCalls,
           orchestratorResult,
           metadata: {
             maxTokens,
@@ -184,22 +188,7 @@ export class AgenticService {
       let response = "";
 
       if (useTools) {
-        // Get tools with RAG service context
-        const tools = getAvailableToolsWithContext(this.ragService);
-
-        // Simple tool detection and execution
-        const toolContext: ToolExecutionContext = {
-          ragService: this.ragService,
-        };
-
-        // Check if prompt requires math operations
-        if (this.isMathQuery(prompt)) {
-          const mathResult = await this.executeMathQuery(prompt);
-          toolsUsed.push("math");
-          response = mathResult;
-        }
-        // Check if prompt requires file operations
-        else if (this.isFileSystemQuery(prompt)) {
+        if (this.isFileSystemQuery(prompt)) {
           const fsResult = await this.executeFileSystemQuery(prompt);
           toolsUsed.push("filesystem");
           response = fsResult;
@@ -282,29 +271,6 @@ export class AgenticService {
   }
 
   /**
-   * Check if prompt is a math query
-   */
-  private isMathQuery(prompt: string): boolean {
-    const mathKeywords = [
-      "calculate",
-      "compute",
-      "add",
-      "subtract",
-      "multiply",
-      "divide",
-      "+",
-      "-",
-      "*",
-      "/",
-      "math",
-      "arithmetic",
-    ];
-    return mathKeywords.some((keyword) =>
-      prompt.toLowerCase().includes(keyword),
-    );
-  }
-
-  /**
    * Check if prompt is a file system query
    */
   private isFileSystemQuery(prompt: string): boolean {
@@ -335,67 +301,6 @@ export class AgenticService {
       ragKeywords.some((keyword) => prompt.toLowerCase().includes(keyword)) &&
       this.ragService.hasIndexedDocuments()
     );
-  }
-
-  /**
-   * Execute math query
-   */
-  private async executeMathQuery(prompt: string): Promise<string> {
-    // Simple math parsing - in a real implementation, you'd use a proper math parser
-    const numbers = prompt.match(/\d+/g);
-    const operations = prompt.match(/[+\-*/]/g);
-
-    if (
-      numbers &&
-      numbers.length >= 2 &&
-      operations &&
-      operations.length >= 1
-    ) {
-      const a = parseInt(numbers[0]);
-      const b = parseInt(numbers[1]!);
-      const op = operations[0];
-
-      let operation: string;
-      switch (op) {
-        case "+":
-          operation = "add";
-          break;
-        case "-":
-          operation = "subtract";
-          break;
-        case "*":
-          operation = "multiply";
-          break;
-        case "/":
-          operation = "divide";
-          break;
-        default:
-          return "Unsupported math operation";
-      }
-
-      // This would normally use the math tool, but for simplicity:
-      let result: number;
-      switch (operation) {
-        case "add":
-          result = a + b;
-          break;
-        case "subtract":
-          result = a - b;
-          break;
-        case "multiply":
-          result = a * b;
-          break;
-        case "divide":
-          result = b !== 0 ? a / b : NaN;
-          break;
-        default:
-          return "Unsupported operation";
-      }
-
-      return `Math result: ${a} ${op} ${b} = ${result}`;
-    }
-
-    return "Could not parse math expression. Please provide numbers and operators.";
   }
 
   /**
