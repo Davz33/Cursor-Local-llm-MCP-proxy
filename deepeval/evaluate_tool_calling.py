@@ -43,6 +43,7 @@ def run_agentic_query(
     max_tokens: int = 500,
     temperature: float = 0.7,
     use_real_llm: bool = False,
+    use_orchestrator: bool = False,
 ) -> Dict[str, Any]:
     """Invoke the Node.js runner and return the parsed JSON payload."""
 
@@ -51,6 +52,7 @@ def run_agentic_query(
         "maxTokens": max_tokens,
         "temperature": temperature,
         "useRealLLM": use_real_llm,
+        "useOrchestrator": use_orchestrator,
     }
 
     if index_texts:
@@ -97,16 +99,11 @@ class Scenario:
     expected_tools: List[Dict[str, Any]]
     index_texts: Optional[List[str]] = None
     use_real_llm: bool = True
+    use_orchestrator: bool = False
+    description: Optional[str] = None
 
 
 SCENARIOS: List[Scenario] = [
-    Scenario(
-        name="Math tool selection",
-        prompt="Calculate 15 + 27 using the math tool",
-        expected_tools=[
-            {"name": "math", "parameters": {"operation": "add", "a": 15, "b": 27}}
-        ],
-    ),
     Scenario(
         name="Directory listing",
         prompt="List the contents of the current directory",
@@ -123,6 +120,109 @@ SCENARIOS: List[Scenario] = [
         index_texts=[
             "Tool calling patterns describe how agents select and sequence tool invocations to satisfy user requests."
         ],
+    ),
+    Scenario(
+        name="RAG followed by directory audit",
+        prompt="Search for 'agent orchestration best practices' and then list the contents of the current directory",
+        expected_tools=[
+            {
+                "name": "rag",
+                "parameters": {"query": "agent orchestration best practices"},
+            },
+            {
+                "name": "filesystem",
+                "parameters": {"action": "list", "path": "."},
+            },
+        ],
+        index_texts=[
+            "Agent orchestration best practices include clear role assignments, shared memory, and deterministic tool routing."
+        ],
+    ),
+    Scenario(
+        name="Ten step research pipeline",
+        prompt="Execute the 10-step research pipeline workflow",
+        expected_tools=[
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "write",
+                    "path": "./tmp_pipeline_raw.txt",
+                    "content": "dataset=12,7,23",
+                },
+            },
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "write",
+                    "path": "./tmp_pipeline_metadata.json",
+                    "content": '{"source": "synthetic", "fields": 3}',
+                },
+            },
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "read",
+                    "path": "./tmp_pipeline_raw.txt",
+                },
+            },
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "read",
+                    "path": "./tmp_pipeline_metadata.json",
+                },
+            },
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "write",
+                    "path": "./tmp_pipeline_summary.txt",
+                    "content": "Summary: collected 3 synthetic observations.",
+                },
+            },
+            {
+                "name": "rag",
+                "parameters": {
+                    "query": "evaluation playbooks and best practices",
+                },
+            },
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "write",
+                    "path": "./tmp_pipeline_rag.txt",
+                    "content": "RAG insights: Follow the evaluation playbook to validate every artifact.",
+                },
+            },
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "read",
+                    "path": "./tmp_pipeline_rag.txt",
+                },
+            },
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "write",
+                    "path": "./tmp_pipeline_report.md",
+                    "content": "# Evaluation Report\n\n- Raw data stored\n- Metadata verified\n- RAG insights appended",
+                },
+            },
+            {
+                "name": "filesystem",
+                "parameters": {
+                    "action": "list",
+                    "path": ".",
+                },
+            },
+        ],
+        index_texts=[
+            "Evaluation playbooks recommend persisting raw data, metadata, and enriched summaries before running final audits.",
+            "A rigorous ten-step workflow validates files after each write and captures findings in a final report.",
+        ],
+        use_orchestrator=True,
+        description="Validates ability to chain 10 concrete tool steps with verification loops using LangGraph.",
     ),
 ]
 
@@ -161,7 +261,7 @@ def main() -> int:
             f"Runner script not found at {RUNNER_PATH}. Build the project before running DeepEval tests."
         )
 
-    available_tools = [build_tool_call(name) for name in ["math", "filesystem", "rag"]]
+    available_tools = [build_tool_call(name) for name in ["filesystem", "rag"]]
     failures: List[str] = []
 
     for scenario in SCENARIOS:
@@ -169,6 +269,7 @@ def main() -> int:
             scenario.prompt,
             index_texts=scenario.index_texts,
             use_real_llm=scenario.use_real_llm,
+            use_orchestrator=scenario.use_orchestrator,
         )
 
         tools_called = [
