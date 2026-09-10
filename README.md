@@ -133,6 +133,13 @@ flowchart TB
 10. `orchestrator_status` - Get orchestrator status and connected tools
 11. `list_orchestrated_tools` - List all available orchestrated tools
 12. `call_orchestrated_tool` - Call specific orchestrated tools directly
+13. `generate_commit_message` - Draft a commit message from git diff via local LLM (see [COMMIT_MESSAGE.md](./COMMIT_MESSAGE.md))
+
+### 📝 Commit message generation
+- **`generate_commit_message` MCP tool**: Analyzes staged, unstaged, or branch diffs with your local model
+- **`/cmtmsg` Cursor skill**: Manual slash command in Agent chat (see [COMMIT_MESSAGE.md](./COMMIT_MESSAGE.md))
+- **Configurable model/URL** via `LOCAL_LLM_URL` and `LM_STUDIO_MODEL` in `mcp.json`
+- Example MCP config: [`.cursor/mcp.json.example`](.cursor/mcp.json.example)
 
 ### 🌐 LM Studio Integration
 - OpenAI-compatible API integration
@@ -155,7 +162,8 @@ flowchart TB
 - **Configurable thresholds** for confidence scoring and fallback triggers
 
 ### 📋 Configuration & Rules
-- **Cursor Delegation Rules**: See [CURSOR_DELEGATION_RULES.md](./CURSOR_DELEGATION_RULES.md) for IDE integration guidelines
+- **Commit messages:** See [COMMIT_MESSAGE.md](./COMMIT_MESSAGE.md) for `generate_commit_message` and `/cmtmsg`
+- **Cursor Delegation Rules:** See [CURSOR_DELEGATION_RULES.md](./CURSOR_DELEGATION_RULES.md) for IDE integration guidelines
 - **Delegation Implementation Guide**: See [DELEGATION_IMPLEMENTATION_GUIDE.md](./DELEGATION_IMPLEMENTATION_GUIDE.md) for complete system setup
 - **MCP Orchestrator Rules**: See [mcp-orchestrator-rules.example.json](./mcp-orchestrator-rules.example.json) for server-side rule configuration
 - **Customizable rule engine** for tool usage policies and validation behavior
@@ -201,14 +209,19 @@ pixi install
 3. Start the server on `http://localhost:1234/v1`
 
 ### 2. Configure Environment (Optional)
+
+Prefer `mcp.json` env (see below). Shell exports also work:
+
 ```bash
-export LM_STUDIO_BASE_URL="http://localhost:1234/v1"
-export LM_STUDIO_MODEL="qwen3-coder-30b-a3b-instruct"
+export LOCAL_LLM_URL="http://127.0.0.1:1234/v1"
+export LM_STUDIO_MODEL="meta-llama-3.1-8b-instruct"
 ```
+
+(`LM_STUDIO_BASE_URL` is accepted as an alias for `LOCAL_LLM_URL`.)
 
 ### 3. Configure MCP Client (Cursor/IDE)
 
-Add the following configuration to your MCP client (e.g., Cursor's `mcp.json`):
+Add the following configuration to your MCP client (e.g., Cursor's `mcp.json`). A full example with `autoApprove` for commit messages is in [`.cursor/mcp.json.example`](.cursor/mcp.json.example):
 
 ```json
 {
@@ -216,9 +229,10 @@ Add the following configuration to your MCP client (e.g., Cursor's `mcp.json`):
     "local-llm-proxy": {
       "command": "node",
       "args": ["/path/to/your/local-llm-proxy/dist/index.js"],
+      "autoApprove": ["generate_commit_message"],
       "env": {
-        "LM_STUDIO_BASE_URL": "http://localhost:1234/v1",
-        "LM_STUDIO_MODEL": "qwen3-coder-30b-a3b-instruct"
+        "LOCAL_LLM_URL": "http://127.0.0.1:1234/v1",
+        "LM_STUDIO_MODEL": "meta-llama-3.1-8b-instruct"
       }
     }
   }
@@ -256,10 +270,15 @@ npm run build
 
 ## 🔧 Configuration
 
-The server can be configured using environment variables:
+The server can be configured using environment variables (usually set in `mcp.json`):
 
-- `LM_STUDIO_BASE_URL`: LM Studio API endpoint (default: `http://localhost:1234/v1`)
-- `LM_STUDIO_MODEL`: Model name in LM Studio (default: `qwen3`)
+- `LOCAL_LLM_URL`: LM Studio API endpoint (preferred; default: `http://localhost:1234/v1`)
+- `LM_STUDIO_BASE_URL`: Alias for `LOCAL_LLM_URL`
+- `LM_STUDIO_MODEL`: Model name in LM Studio (default: `qwen3-coder-30b-a3b-instruct`)
+
+### Commit message generation
+
+See [COMMIT_MESSAGE.md](./COMMIT_MESSAGE.md) for the `generate_commit_message` tool, `/cmtmsg` skill setup, diff scopes, and LM Studio tuning.
 
 ### Real-time Information with Sonar API
 
@@ -379,6 +398,22 @@ The orchestrator automatically combines both rule sets:
 }
 ```
 
+### Generate commit message
+
+```json
+{
+  "name": "generate_commit_message",
+  "arguments": {
+    "repo_path": "/path/to/your/repo",
+    "diff_scope": "staged",
+    "include_recent_commits": true,
+    "max_diff_chars": 12000
+  }
+}
+```
+
+See [COMMIT_MESSAGE.md](./COMMIT_MESSAGE.md) for diff scopes, the `/cmtmsg` skill, and performance notes.
+
 ## 🧪 Testing
 
 The server includes comprehensive testing capabilities:
@@ -417,6 +452,7 @@ Once configured in your MCP client, you can test the tools:
 2. **Chat Completion:** Use `mcp_local-llm-proxy_chat_completion` 
 3. **RAG Query:** Use `mcp_local-llm-proxy_rag_query`
 4. **Index Document:** Use `mcp_local-llm-proxy_index_document`
+5. **Commit message:** Type `/cmtmsg` in Agent chat or call `generate_commit_message` (see [COMMIT_MESSAGE.md](./COMMIT_MESSAGE.md))
 
 ## 🏗 Architecture
 

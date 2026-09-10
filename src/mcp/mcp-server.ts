@@ -7,6 +7,11 @@ import {
 import { AgenticService } from "../agentic/agentic-service.js";
 import { RAGService } from "../rag/rag-service.js";
 import { SonarService } from "../services/sonar-service.js";
+import {
+  GitCommitService,
+  type DiffScope,
+  type GenerateCommitMessageOptions,
+} from "../services/git-commit-service.js";
 // import { createEnhancedMemoryTools } from "../tools/enhanced-memory-tools.js";
 import { config } from "dotenv";
 
@@ -54,6 +59,16 @@ export interface SonarQueryArgs {
   model?: string;
 }
 
+export interface GenerateCommitMessageArgs {
+  repo_path?: string;
+  diff_scope?: DiffScope;
+  base_branch?: string;
+  max_tokens?: number;
+  temperature?: number;
+  include_recent_commits?: boolean;
+  max_diff_chars?: number;
+}
+
 /**
  * Local LLM Proxy MCP Server with retrieval and agentic integration
  */
@@ -62,6 +77,7 @@ export class LocalLLMProxyServer {
   private agenticService: AgenticService;
   private ragService: RAGService;
   private sonarService: SonarService;
+  private gitCommitService: GitCommitService;
 
   constructor() {
     this.server = new Server({
@@ -71,6 +87,7 @@ export class LocalLLMProxyServer {
 
     this.agenticService = new AgenticService();
     this.ragService = this.agenticService.getRAGService();
+    this.gitCommitService = new GitCommitService();
 
     // Initialize Sonar service (will throw error if API key is missing)
     try {
@@ -350,6 +367,55 @@ export class LocalLLMProxyServer {
             },
           },
           {
+            name: "generate_commit_message",
+            description:
+              "Analyze git changes with a local LLM and produce a structured commit message",
+            inputSchema: {
+              type: "object",
+              properties: {
+                repo_path: {
+                  type: "string",
+                  description:
+                    "Absolute or relative path to the git repository (defaults to process cwd)",
+                },
+                diff_scope: {
+                  type: "string",
+                  description:
+                    "Which changes to include: staged (default), unstaged, all (vs HEAD), or branch (vs base_branch)",
+                  enum: ["staged", "unstaged", "all", "branch"],
+                  default: "staged",
+                },
+                base_branch: {
+                  type: "string",
+                  description:
+                    "Base branch for diff_scope=branch (defaults to main, or master if main is missing)",
+                },
+                max_tokens: {
+                  type: "number",
+                  description: "Maximum tokens for commit message generation",
+                  default: 800,
+                },
+                temperature: {
+                  type: "number",
+                  description: "Temperature for commit message generation",
+                  default: 0.3,
+                },
+                include_recent_commits: {
+                  type: "boolean",
+                  description:
+                    "Include recent commit subjects so the model can match repository style",
+                  default: true,
+                },
+                max_diff_chars: {
+                  type: "number",
+                  description:
+                    "Maximum number of diff characters sent to the local model",
+                  default: 48000,
+                },
+              },
+            },
+          },
+          {
             name: "sonar_query",
             description:
               "Query Perplexity's Sonar API for real-time information with citations",
@@ -482,6 +548,10 @@ export class LocalLLMProxyServer {
                 temperature?: number;
                 enable_validation?: boolean;
               },
+            );
+          case "generate_commit_message":
+            return await this.handleGenerateCommitMessage(
+              args as unknown as GenerateCommitMessageArgs,
             );
           case "sonar_query":
             return await this.handleSonarQuery(
@@ -1054,6 +1124,79 @@ Validation: ${JSON.stringify(status.validation, null, 2)}`,
     process.on("SIGINT", () => shutdown("SIGINT"));
     process.on("SIGTERM", () => shutdown("SIGTERM"));
     process.on("SIGHUP", () => shutdown("SIGHUP"));
+  }
+
+  /**
+   * Generate a commit message from git diff using the local LLM
+   */
+  private async handleGenerateCommitMessage(args: GenerateCommitMessageArgs) {
+    try {
+      const serviceOptions: GenerateCommitMessageOptions = {};
+      if (args.repo_path) {
+        serviceOptions.repoPath = args.repo_path;
+      }
+      if (args.diff_scope) {
+        serviceOptions.diffScope = args.diff_scope;
+      }
+      if (args.base_branch) {
+        serviceOptions.baseBranch = args.base_branch;
+      }
+      if (args.max_tokens !== undefined) {
+        serviceOptions.maxTokens = args.max_tokens;
+      }
+      if (args.temperature !== undefined) {
+        serviceOptions.temperature = args.temperature;
+      }
+      if (args.include_recent_commits !== undefined) {
+        serviceOptions.includeRecentCommits = args.include_recent_commits;
+      }
+      if (args.max_diff_chars !== undefined) {
+        serviceOptions.maxDiffChars = args.max_diff_chars;
+      }
+
+      const result =
+        await this.gitCommitService.generateCommitMessage(serviceOptions);
+
+      const responseText = [
+        result.commitMessage,
+        "",
+        "--- Commit Message Details ---",
+        `Subject: ${result.subject}`,
+        `Branch: ${result.branch}`,
+        `Diff scope: ${result.diffScope}${
+          result.baseBranch ? ` (base: ${result.baseBranch})` : ""
+        }`,
+        `Files changed: ${result.filesChanged.length}`,
+        result.filesChanged.length > 0
+          ? result.filesChanged.map((file) => `  - ${file}`).join("\n")
+          : "",
+        result.diffStat ? `\nDiff stat:\n${result.diffStat}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: responseText,
+          },
+        ],
+      };
+    } catch (error) {
+      console.error(
+        "MCP Server: Error generating commit message:",
+        (error as Error).message,
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error generating commit message: ${(error as Error).message}`,
+          },
+        ],
+      };
+    }
   }
 
   /**
