@@ -10,6 +10,7 @@ interface CursorConfig {
     [key: string]: {
       env?: {
         LOCAL_LLM_URL?: string;
+        LM_STUDIO_BASE_URL?: string;
         LM_STUDIO_MODEL?: string;
       };
     };
@@ -61,15 +62,19 @@ function readCursorConfig(): CursorConfig | null {
 function getConfigValues() {
   const cursorConfig = readCursorConfig();
 
-  // Priority: Environment variables > Cursor MCP server config > Defaults
+  const mcpEnv = cursorConfig?.mcpServers?.["local-llm-proxy"]?.env;
+
+  // Priority: process env (from mcp.json) > .cursor-settings.json > defaults
   const baseURL =
     process.env.LOCAL_LLM_URL ||
-    cursorConfig?.mcpServers?.["local-llm-proxy"]?.env?.LOCAL_LLM_URL ||
+    process.env.LM_STUDIO_BASE_URL ||
+    mcpEnv?.LOCAL_LLM_URL ||
+    mcpEnv?.LM_STUDIO_BASE_URL ||
     DEFAULT_LM_STUDIO_BASE_URL;
 
   const model =
     process.env.LM_STUDIO_MODEL ||
-    cursorConfig?.mcpServers?.["local-llm-proxy"]?.env?.LM_STUDIO_MODEL ||
+    mcpEnv?.LM_STUDIO_MODEL ||
     DEFAULT_LM_STUDIO_MODEL;
 
   // Use default values for temperature and maxTokens since they're not in the MCP config
